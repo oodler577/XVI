@@ -3,3 +3,6 @@ all:
 
 run:
 	x16emu -scale 2 -prg ./VICL1.prg -run
+
+debug:
+	x16emu -scale 2 -prg ./VICL1.prg -run -debug
