@@ -9,7 +9,7 @@ main {
     sub start() {
         vtui.initialize()
 
-        txt.lowercase()
+        ;txt.lowercase()
         vtui.screen_set(0)
         vtui.clr_scr(' ', $50)
         vtui.gotoxy(2,2)
@@ -27,7 +27,10 @@ main {
            vtui.gotoxy(45,1);
            vtui.print_str2("ins", $01, true); 
            vtui.gotoxy(3,line)
-           ubyte lastkey = vtui.input_str(inputbuffer, len(inputbuffer), $c6)
+           ; if the last key is ESC, input_str will exit - we check to see
+           ; if it was ESC (not RET), put in navMode if ESC, go to next line
+           ; in "editMode" if not - getting very close to vi-like modalities
+           ubyte lastkey = vtui.input_str_lastkey(inputbuffer, len(inputbuffer), $c6)
            if lastkey == $1b {
              navMode()
            }
@@ -87,8 +90,8 @@ vtui $1000 {
     romsub $102c  =  border(ubyte mode @A, ubyte width @R1, ubyte height @R2, ubyte colors @X) clobbers(Y)       ; NOTE: mode 6 means 'custom' characters taken from r3 - r6
     romsub $102f  =  save_rect(ubyte ramtype @A, bool vbank1 @Pc, uword address @R0, ubyte width @R1, ubyte height @R2) clobbers(A, X, Y)
     romsub $1032  =  rest_rect(ubyte ramtype @A, bool vbank1 @Pc, uword address @R0, ubyte width @R1, ubyte height @R2) clobbers(A, X, Y)
-    ;romsub $1035  =  input_str(uword buffer @R0, ubyte buflen @Y, ubyte colors @X) clobbers (A) -> ubyte @Y
-    romsub $1035  =  input_str(uword buffer @R0, ubyte buflen @Y, ubyte colors @X) clobbers (Y) -> ubyte @A
+    romsub $1035  =  input_str(uword buffer @R0, ubyte buflen @Y, ubyte colors @X) clobbers (A) -> ubyte @Y         ; NOTE: returns string length
+    romsub $1035  =  input_str_lastkey(uword buffer @R0, ubyte buflen @Y, ubyte colors @X) clobbers (Y) -> ubyte @A ; NOTE: returns lastkey press
     romsub $1038  =  get_bank() clobbers (A) -> bool @Pc
     romsub $103b  =  get_stride() -> ubyte @A
     romsub $103e  =  get_decr() clobbers (A) -> bool @Pc
