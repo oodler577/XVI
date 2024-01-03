@@ -17,7 +17,7 @@ main {
         vtui.gotoxy(2,2)
         vtui.border(3, 76, 56, $00)
 
-        str inputbuffer = "?" * 73 
+        str inputbuffer = "?" * 73 ; this is the width of the inner box vtui box 
         ubyte line = 2
         navMode()
 
@@ -50,7 +50,10 @@ nav:
       ubyte char = cbm.GETIN()
       when char {
           $1b -> { ; ESC key
-              goto main.start.edit_mode 
+            goto nav
+          }
+          $49 -> { ; insert (I) 
+            goto main.start.edit_mode 
           }
           $3a -> { ; colon (:)
             vtui.gotoxy(45,1);
@@ -58,12 +61,24 @@ nav:
             str cmdbuffer = "?" * 29 
             vtui.gotoxy(49,1);
             vtui.input_str(cmdbuffer, 28, $e0)
+            if (cmdbuffer[0] == 'q') {
+              vtui.gotoxy(1,1)
+              txt.clear_screen()
+              txt.print("thank you for using vicl1, the vi clone for the x16!\n")
+              txt.nl()
+              txt.print("please visit https://github.com/oodler577/vicl1 for updates\n")
+              sys.exit(0)
+            }
             goto navstart
           }
       }
       goto nav
    }
 }
+
+;
+; Below this line is the bindings using for the VTUI library via Prog8's "romsub" keyword
+;
 
 vtui $1000 {
 
