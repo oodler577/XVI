@@ -1,12 +1,21 @@
-%import textio
-%option no_sysinit
+%import   textio
+%import   conv
+%import   syslib
+%option   no_sysinit
 %zeropage basicsafe
 
 ; simple test program for the "VTUI" text user interface library
 ; see:  https://github.com/JimmyDansbo/VTUIlib
 
 main {
-    sub start() {
+    ubyte originX = 3
+    ubyte originY = 3
+    ubyte line    = originY
+    ubyte col     = originX 
+    ubyte maxCol  = 76
+    ubyte Y       = 0
+
+    sub init_canvas() {
         vtui.initialize()
 
         ;txt.lowercase()
@@ -16,63 +25,166 @@ main {
         vtui.fill_box(' ', 76, 56, $c6)
         vtui.gotoxy(2,2)
         vtui.border(3, 76, 56, $00)
+    }
 
-        str inputbuffer = "?" * 73 ; this is the width of the inner box vtui box 
-        ubyte line = 2
+    sub reset_cursor() {
+        vtui.gotoxy(originX, originY)
+        vtui.fill_box(' ', 1, 1, $e1)
+    }
+
+    sub updateXY_ticker() {
+        ubyte x = cx16.VERA_ADDR_L / 2   ; cursor X coordinate
+        ubyte y = cx16.VERA_ADDR_M - $b0 ; cursor Y coordinate
+
+        vtui.gotoxy(68, 57)
+        vtui.fill_box(' ', 7, 1, $00)
+        vtui.gotoxy(68, 57)
+
+        conv.str_ub0(x-3)
+        vtui.print_str2(conv.string_out, $01, true)
+
+        vtui.print_str2(" ", $01, true)
+
+        conv.str_ub0(y-3)
+        vtui.print_str2(", ", $01, true)
+        vtui.print_str2(conv.string_out, $01, true)
+
+        ;main.col  = x
+        ;main.line = y
+        vtui.gotoxy(main.col,main.line)
+    }
+
+    sub start() {
+        init_canvas()
+        updateXY_ticker()
+        ;reset_cursor()
+        vtui.gotoxy(main.originX,main.originY);
         navMode()
-
+        vtui.fill_box(' ', 1, 1, $e1)
+        str inputbuffer = "?" * 73 ; this is the width of the inner box vtui box 
         while 1 {
-           vtui.gotoxy(45,1);
-           vtui.fill_box(' ', 33, 1, $e0)
-           vtui.gotoxy(45,1);
-           vtui.print_str2("ins", $01, true); 
-           vtui.gotoxy(3,line)
+           vtui.gotoxy(main.col,main.line)
+           updateXY_ticker()
+
            ; if the last key is ESC, input_str will exit - we check to see
            ; if it was ESC (not RET), put in navMode if ESC, go to next line
            ; in "editMode" if not - getting very close to vi-like modalities
-           ubyte lastkey = vtui.input_str_lastkey(inputbuffer, len(inputbuffer), $c6)
-           if lastkey == $1b {
+
+           uword AX       = vtui.input_str_retboth(inputbuffer, len(inputbuffer), $c6)
+           ubyte lastkey  = lsb(AX)
+           ubyte inputLen = msb(AX)
+
+           if lastkey == $1b {                ; $1b is <ESC>
+             main.col  = cx16.VERA_ADDR_L / 2   ; cursor X coordinate
+             main.line = cx16.VERA_ADDR_M - $b0 ; cursor Y coordinate
+             
+             updateXY_ticker()
              navMode()
            }
-edit_mode:
-           line = line + 1
-        }
 
+           main.col  = 3
+           main.line = main.line + 1
+edit_mode:
+        }
    }
 
    sub navMode() {
 navstart:
-      vtui.gotoxy(45,1);
-      vtui.fill_box(' ', 33, 1, $e0)
-      vtui.gotoxy(45,1);
-      vtui.print_str2("nav ", $01, true); 
-nav:
+      vtui.fill_box(' ', 1, 1, $e1)
+navcharloop:
       ubyte char = cbm.GETIN()
       when char {
           $1b -> { ; ESC key
-            goto nav
+            goto navcharloop
           }
           $49 -> { ; insert (I) 
             goto main.start.edit_mode 
           }
+; TODO: make cursor movements non-destructive (using
+; save_rect and rest_rect)
+          $4b -> { ; nav up (K)
+            vtui.gotoxy(main.col,main.line)
+            vtui.fill_box(' ', 1, 1, $c6)
+            main.line = main.line - 1;
+            if (main.line < 3) {
+              main.line = 3 
+            }
+            vtui.gotoxy(main.col,main.line)
+            vtui.fill_box(' ', 1, 1, $e1)
+            updateXY_ticker()
+          }
+          $4a -> { ; nav down (J)
+            vtui.gotoxy(main.col,main.line)
+            vtui.fill_box(' ', 1, 1, $c6)
+            main.line = main.line + 1;
+            if (main.line > 56) {
+              main.line = 56 
+            }
+            vtui.gotoxy(main.col,main.line)
+            vtui.fill_box(' ', 1, 1, $e1)
+            updateXY_ticker()
+          }
+          $48 -> { ; nav left (H)
+            vtui.gotoxy(main.col,main.line)
+            vtui.fill_box(' ', 1, 1, $c6)
+            main.col = main.col - 1;
+            if (main.col < 3) {
+              main.col  = 56 
+              main.line = main.line - 1
+              if (main.line < 3) {
+                main.col  = main.originX ; prevent infinite L-R on the topmost line
+                main.line = main.originY 
+              }
+            }
+            vtui.gotoxy(main.col,main.line)
+            vtui.fill_box(' ', 1, 1, $e1)
+            updateXY_ticker()
+          }
+          $4c -> { ; nav right (L)
+            vtui.gotoxy(main.col,main.line)
+            vtui.fill_box(' ', 1, 1, $c6)
+            main.col = main.col + 1;
+            if (main.col > main.maxCol) {
+              main.col  = 3
+              main.line = main.line + 1
+              if (main.line > 56) {
+                main.col  = main.maxCol 
+                main.line = 56 
+              }
+            }
+            vtui.gotoxy(main.col,main.line)
+            vtui.fill_box(' ', 1, 1, $e1)
+            updateXY_ticker()
+          }
           $3a -> { ; colon (:)
-            vtui.gotoxy(45,1);
-            vtui.print_str2("cmd ", $01, true); 
-            str cmdbuffer = "?" * 29 
-            vtui.gotoxy(49,1);
-            vtui.input_str(cmdbuffer, 28, $e0)
+            vtui.gotoxy(2,58);
+            vtui.fill_box(' ', 50, 1, $06)
+            vtui.gotoxy(2,58);
+            vtui.print_str2(": ", $01, true); 
+            str cmdbuffer = " " * 10 
+            vtui.gotoxy(3,58);
+            vtui.input_str(cmdbuffer, 10, $01)
             if (cmdbuffer[0] == 'q') {
               vtui.gotoxy(1,1)
               txt.clear_screen()
-              txt.print("thank you for using vicl1, the vi clone for the x16!\n")
-              txt.nl()
-              txt.print("please visit https://github.com/oodler577/vicl1 for updates\n")
+              txt.print("thank you for using vicl1, the vi clone for the x16!\n\n")
+              txt.print("for updates, please visit\n\n")
+              txt.print("https://github.com/oodler577/vicl1\n")
               sys.exit(0)
             }
-            goto navstart
+            else {
+              vtui.gotoxy(2,58);
+              vtui.fill_box(' ', 50, 1, $21)
+              vtui.gotoxy(2,58);
+              vtui.print_str2("not an editor command: ", $21, true)
+              vtui.print_str2(cmdbuffer, $21, true)
+              sys.wait(50)
+              vtui.gotoxy(2,58);
+              vtui.fill_box(' ', 50, 1, $50)
+            }
           }
       }
-      goto nav
+      goto navcharloop
    }
 }
 
@@ -102,11 +214,12 @@ vtui $1000 {
     romsub $1023 = fill_box(ubyte char @A, ubyte width @R1, ubyte height @R2, ubyte colors @X) clobbers(A, Y)
     romsub $1026 = pet2scr(ubyte char @A) -> ubyte @A
     romsub $1029 = scr2pet(ubyte char @A) -> ubyte @A
-    romsub $102c = border(ubyte mode @A, ubyte width @R1, ubyte height @R2, ubyte colors @X) clobbers(Y)          ; NOTE: mode 6 means 'custom' characters taken from r3 - r6
+    romsub $102c = border(ubyte mode @A, ubyte width @R1, ubyte height @R2, ubyte colors @X) clobbers(Y)              ; NOTE: mode 6 means 'custom' characters taken from r3 - r6
     romsub $102f = save_rect(ubyte ramtype @A, bool vbank1 @Pc, uword address @R0, ubyte width @R1, ubyte height @R2) clobbers(A, X, Y)
     romsub $1032 = rest_rect(ubyte ramtype @A, bool vbank1 @Pc, uword address @R0, ubyte width @R1, ubyte height @R2) clobbers(A, X, Y)
-    romsub $1035 = input_str(uword buffer @R0, ubyte buflen @Y, ubyte colors @X) clobbers (A) -> ubyte @Y         ; NOTE: returns string length
-    romsub $1035 = input_str_lastkey(uword buffer @R0, ubyte buflen @Y, ubyte colors @X) clobbers (Y) -> ubyte @A ; NOTE: returns lastkey press
+    romsub $1035 = input_str(uword buffer @R0, ubyte buflen @Y, ubyte colors @X) clobbers (A) -> ubyte @Y             ; NOTE: returns string length
+    romsub $1035 = input_str_lastkey(uword buffer @R0, ubyte buflen @Y, ubyte colors @X) clobbers (Y) -> ubyte @A     ; NOTE: returns lastkey press
+    romsub $1035 = input_str_retboth(uword buffer @R0, ubyte buflen @Y, ubyte colors @X) clobbers () -> uword @AY     ; NOTE: returns lastkey press, string length
     romsub $1038 = get_bank() clobbers (A) -> bool @Pc
     romsub $103b = get_stride() -> ubyte @A
     romsub $103e = get_decr() clobbers (A) -> bool @Pc
