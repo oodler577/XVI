@@ -1,7 +1,6 @@
 %import   textio
 %import   conv
 %import   syslib
-%import   math
 %option   no_sysinit
 %zeropage basicsafe
 
@@ -14,7 +13,7 @@ main {
     ubyte minLine = 3
     ubyte maxLine = 56
     ubyte line    = minLine
-    ubyte col     = minCol 
+    ubyte col     = minCol
     ubyte Y       = 0
 
     sub init_canvas() {
@@ -61,7 +60,7 @@ main {
 
         navMode()
 
-        str inputbuffer = "?" * 73 ; this is the width of the inner box vtui box 
+        str inputbuffer = "?" * 73 ; this is the width of the inner box vtui box
         while 1 {
            vtui.gotoxy(main.col,main.line)
            updateXY_ticker()
@@ -77,7 +76,7 @@ main {
            if lastkey == $1b {                ; $1b is <ESC>
              main.col  = cx16.VERA_ADDR_L / 2   ; cursor X coordinate
              main.line = cx16.VERA_ADDR_M - $b0 ; cursor Y coordinate
-             
+
              updateXY_ticker()
              navMode()
            }
@@ -93,15 +92,15 @@ edit_mode:
 navstart:
       vtui.fill_box(' ', 1, 1, $e1)
 navcharloop:
-      ubyte newx = main.col 
+      ubyte newx = main.col
       ubyte newy = main.line
       ubyte char = cbm.GETIN()
       when char {
           $1b -> { ; ESC key
             goto navcharloop
           }
-          $49 -> { ; insert (I) 
-            goto main.start.edit_mode 
+          $49 -> { ; insert (I)
+            goto main.start.edit_mode
           }
           $4b -> { ; nav up (K)
             if newy > minLine {
@@ -135,8 +134,8 @@ navcharloop:
             vtui.gotoxy(2,58);
             vtui.fill_box(' ', 50, 1, $06)
             vtui.gotoxy(2,58);
-            vtui.print_str2(": ", $01, true); 
-            str cmdbuffer = " " * 10 
+            vtui.print_str2(": ", $01, true);
+            str cmdbuffer = " " * 10
             vtui.gotoxy(3,58);
             vtui.input_str(cmdbuffer, 10, $01)
             if (cmdbuffer[0] == 'q') {
