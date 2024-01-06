@@ -1,6 +1,7 @@
 %import   textio
 %import   conv
 %import   syslib
+%import   math
 %option   no_sysinit
 %zeropage basicsafe
 
@@ -8,17 +9,16 @@
 ; see:  https://github.com/JimmyDansbo/VTUIlib
 
 main {
-    ubyte originX = 3
-    ubyte originY = 3
-    ubyte line    = originY
-    ubyte col     = originX 
+    ubyte minCol  = 3
     ubyte maxCol  = 76
+    ubyte minLine = 3
+    ubyte maxLine = 56
+    ubyte line    = minLine
+    ubyte col     = minCol 
     ubyte Y       = 0
 
     sub init_canvas() {
         vtui.initialize()
-
-        ;txt.lowercase()
         vtui.screen_set(0)
         vtui.clr_scr(' ', $50)
         vtui.gotoxy(2,2)
@@ -27,40 +27,40 @@ main {
         vtui.border(3, 76, 56, $00)
     }
 
-    sub reset_cursor() {
-        vtui.gotoxy(originX, originY)
-        vtui.fill_box(' ', 1, 1, $e1)
-    }
-
     sub updateXY_ticker() {
-        ubyte x = cx16.VERA_ADDR_L / 2   ; cursor X coordinate
-        ubyte y = cx16.VERA_ADDR_M - $b0 ; cursor Y coordinate
+        ubyte x = main.col  ;cx16.VERA_ADDR_L / 2   ; cursor X coordinate
+        ubyte y = main.line ;cx16.VERA_ADDR_M - $b0 ; cursor Y coordinate
 
         vtui.gotoxy(68, 57)
         vtui.fill_box(' ', 7, 1, $00)
         vtui.gotoxy(68, 57)
 
-        conv.str_ub0(x-3)
+        conv.str_ub0(x-2)
         vtui.print_str2(conv.string_out, $01, true)
 
         vtui.print_str2(" ", $01, true)
 
-        conv.str_ub0(y-3)
-        vtui.print_str2(", ", $01, true)
+        conv.str_ub0(y-2)
+        vtui.print_str2(",", $01, true)
         vtui.print_str2(conv.string_out, $01, true)
 
-        ;main.col  = x
-        ;main.line = y
         vtui.gotoxy(main.col,main.line)
     }
 
     sub start() {
         init_canvas()
-        updateXY_ticker()
-        ;reset_cursor()
-        vtui.gotoxy(main.originX,main.originY);
-        navMode()
+
+        ; place cursor initial position
+        vtui.gotoxy(main.minCol,main.minLine);
         vtui.fill_box(' ', 1, 1, $e1)
+
+        ; init saved chars for non-destructive cursor moves
+        vtui.gotoxy(main.minCol,main.minLine);
+        vtui.save_rect($80, 1, $1000, 1, 1)
+        vtui.save_rect($80, 1, $0100, 1, 1)
+
+        navMode()
+
         str inputbuffer = "?" * 73 ; this is the width of the inner box vtui box 
         while 1 {
            vtui.gotoxy(main.col,main.line)
@@ -89,9 +89,12 @@ edit_mode:
    }
 
    sub navMode() {
+      updateXY_ticker()
 navstart:
       vtui.fill_box(' ', 1, 1, $e1)
 navcharloop:
+      ubyte newx = main.col 
+      ubyte newy = main.line
       ubyte char = cbm.GETIN()
       when char {
           $1b -> { ; ESC key
@@ -100,60 +103,32 @@ navcharloop:
           $49 -> { ; insert (I) 
             goto main.start.edit_mode 
           }
-; TODO: make cursor movements non-destructive (using
-; save_rect and rest_rect)
           $4b -> { ; nav up (K)
-            vtui.gotoxy(main.col,main.line)
-            vtui.fill_box(' ', 1, 1, $c6)
-            main.line = main.line - 1;
-            if (main.line < 3) {
-              main.line = 3 
+            if newy > minLine {
+              newy--
             }
-            vtui.gotoxy(main.col,main.line)
-            vtui.fill_box(' ', 1, 1, $e1)
+            move_cursor()
             updateXY_ticker()
           }
           $4a -> { ; nav down (J)
-            vtui.gotoxy(main.col,main.line)
-            vtui.fill_box(' ', 1, 1, $c6)
-            main.line = main.line + 1;
-            if (main.line > 56) {
-              main.line = 56 
+            if newy < maxLine {
+              newy++
             }
-            vtui.gotoxy(main.col,main.line)
-            vtui.fill_box(' ', 1, 1, $e1)
+            move_cursor()
             updateXY_ticker()
           }
           $48 -> { ; nav left (H)
-            vtui.gotoxy(main.col,main.line)
-            vtui.fill_box(' ', 1, 1, $c6)
-            main.col = main.col - 1;
-            if (main.col < 3) {
-              main.col  = 56 
-              main.line = main.line - 1
-              if (main.line < 3) {
-                main.col  = main.originX ; prevent infinite L-R on the topmost line
-                main.line = main.originY 
-              }
+            if newx > minCol {
+              newx--
             }
-            vtui.gotoxy(main.col,main.line)
-            vtui.fill_box(' ', 1, 1, $e1)
+            move_cursor()
             updateXY_ticker()
           }
           $4c -> { ; nav right (L)
-            vtui.gotoxy(main.col,main.line)
-            vtui.fill_box(' ', 1, 1, $c6)
-            main.col = main.col + 1;
-            if (main.col > main.maxCol) {
-              main.col  = 3
-              main.line = main.line + 1
-              if (main.line > 56) {
-                main.col  = main.maxCol 
-                main.line = 56 
-              }
+            if newx < maxCol {
+              newx++
             }
-            vtui.gotoxy(main.col,main.line)
-            vtui.fill_box(' ', 1, 1, $e1)
+            move_cursor()
             updateXY_ticker()
           }
           $3a -> { ; colon (:)
@@ -183,8 +158,18 @@ navcharloop:
               vtui.fill_box(' ', 50, 1, $50)
             }
           }
-      }
-      goto navcharloop
+     }
+     goto navcharloop
+     sub move_cursor() {
+       vtui.gotoxy(main.col, main.line)
+       vtui.rest_rect($80, 1, $0100, 1, 1)
+       vtui.gotoxy(newx, newy)
+       vtui.save_rect($80, 1, $0100, 1, 1)
+       vtui.gotoxy(newx, newy)
+       vtui.rest_rect($80, 1, $0000, 1, 1)
+       main.col  = newx
+       main.line = newy
+     }
    }
 }
 
