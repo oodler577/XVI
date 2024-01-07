@@ -21,9 +21,9 @@ main {
         vtui.screen_set(0)
         vtui.clr_scr(' ', $50)
         vtui.gotoxy(2,2)
-        vtui.fill_box(' ', 76, 56, $c6)
+        vtui.fill_box('-', 76, 56, $c6)
         vtui.gotoxy(2,2)
-        vtui.border(3, 76, 56, $00)
+        vtui.border(1, 76, 56, $00)
     }
 
     sub updateXY_ticker() {
@@ -49,14 +49,16 @@ main {
     sub start() {
         init_canvas()
 
+        ; init saved chars for non-destructive cursor moves
+        vtui.gotoxy(main.minCol,main.minLine);
+        vtui.save_rect($80, 1, $0100, 1, 1)
+
         ; place cursor initial position
         vtui.gotoxy(main.minCol,main.minLine);
         vtui.fill_box(' ', 1, 1, $e1)
 
-        ; init saved chars for non-destructive cursor moves
         vtui.gotoxy(main.minCol,main.minLine);
-        vtui.save_rect($80, 1, $1000, 1, 1)
-        vtui.save_rect($80, 1, $0100, 1, 1)
+        vtui.save_rect($80, 1, $0000, 1, 1)
 
         navMode()
 
@@ -95,6 +97,7 @@ navcharloop:
       ubyte newx = main.col
       ubyte newy = main.line
       ubyte char = cbm.GETIN()
+      ubyte xtra
       when char {
           $1b -> { ; ESC key
             goto navcharloop
@@ -126,6 +129,71 @@ navcharloop:
           $4c -> { ; nav right (L)
             if newx < maxCol {
               newx++
+            }
+            move_cursor()
+            updateXY_ticker()
+          }
+          $58 -> { ; delete, move left (X)
+            vtui.gotoxy(main.col,main.line)
+            vtui.fill_box(' ', 1, 1, $c6)
+            vtui.save_rect($80, 1, $0100, 1, 1)
+            if newx > minCol {
+              newx--
+            }
+            move_cursor()
+            updateXY_ticker()
+          }
+          $5E -> { ; ^ (SHIFT+6), jump to start of the line
+            newx = main.minCol
+            move_cursor()
+            updateXY_ticker()
+          }
+          $24 -> { ; $ (SHIFT+4), jump to start of the line
+            newx = main.maxCol
+            move_cursor()
+            updateXY_ticker()
+          }
+          $59 -> { ; copy (Y)
+; TODO - trigger on "YY"
+            vtui.gotoxy(main.minCol,main.line)
+            vtui.save_rect($80, 1, $0022, 73, 1)  ; save rectangle
+
+            if newy < maxLine {
+              newy++
+            }
+            move_cursor()
+            updateXY_ticker()
+          }
+          $44 -> { ; cut (D)
+; TODO - trigger on "DD"
+
+; TODO - fix "streak" left by cursor
+            vtui.gotoxy(main.minCol,main.line)
+            vtui.save_rect($80, 1, $0022, 73, 1)  ; save rectangle
+
+            vtui.gotoxy(main.minCol,main.line)    ; stay on current line, go to starting col
+            vtui.fill_box(' ', 75, 1, $c6)        ; draw over (eventually needs to shift up
+
+            if newy < maxLine {
+              newy++
+            }
+            move_cursor()
+            updateXY_ticker()
+          }
+          $50 -> { ; paste (P)
+            ubyte prevy = main.line
+            if newy < maxLine {
+              newy++
+              move_cursor()
+              updateXY_ticker()
+
+              vtui.gotoxy(main.minCol,prevy)
+              vtui.rest_rect($80, 1, $0022, 74, 1)  ; restore saved memory here
+            }
+            else {
+              vtui.rest_rect($80, 1, $0022, 74, 1)  ; restore saved memory here
+              vtui.gotoxy(main.minCol,prevy)
+              vtui.save_rect($80, 1, $0100, 1, 1)
             }
             move_cursor()
             updateXY_ticker()
