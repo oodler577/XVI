@@ -21,7 +21,7 @@ main {
         vtui.screen_set(0)
         vtui.clr_scr(' ', $50)
         vtui.gotoxy(2,2)
-        vtui.fill_box('-', 76, 56, $c6)
+        vtui.fill_box(' ', 76, 56, $c6)
         vtui.gotoxy(2,2)
         vtui.border(1, 76, 56, $00)
     }
@@ -97,7 +97,7 @@ navcharloop:
       ubyte newx = main.col
       ubyte newy = main.line
       ubyte char = cbm.GETIN()
-      ubyte xtra
+
       when char {
           $1b -> { ; ESC key
             goto navcharloop
@@ -133,6 +133,18 @@ navcharloop:
             move_cursor()
             updateXY_ticker()
           }
+          $31 -> { ; jump to the bottom (SHIFT+G)
+            newx = main.minCol
+            newy = main.minLine
+            move_cursor()
+            updateXY_ticker()
+          }
+          $c7 -> { ; jump to the bottom (SHIFT+G)
+            newx = main.minCol
+            newy = main.maxLine
+            move_cursor()
+            updateXY_ticker()
+          }
           $58 -> { ; delete, move left (X)
             vtui.gotoxy(main.col,main.line)
             vtui.fill_box(' ', 1, 1, $c6)
@@ -153,47 +165,77 @@ navcharloop:
             move_cursor()
             updateXY_ticker()
           }
-          $59 -> { ; copy (Y)
-; TODO - trigger on "YY"
-            vtui.gotoxy(main.minCol,main.line)
-            vtui.save_rect($80, 1, $0022, 73, 1)  ; save rectangle
-
-            if newy < maxLine {
-              newy++
-            }
-            move_cursor()
-            updateXY_ticker()
-          }
-          $44 -> { ; cut (D)
+          $44 -> { ; cut (D) shift all lines from main.line to main.maxLine up 1
 ; TODO - trigger on "DD"
 
-; TODO - fix "streak" left by cursor
-            vtui.gotoxy(main.minCol,main.line)
-            vtui.save_rect($80, 1, $0022, 73, 1)  ; save rectangle
+            ; do delete
+            if main.line+1 <= main.maxLine {
+              vtui.gotoxy(main.col,main.line)
+              vtui.rest_rect($80, 1, $0100, 1, 1)   ; restore what is under cursor for save_rect
+  
+              vtui.gotoxy(main.minCol,main.line)
+              vtui.save_rect($80, 1, $0022, 74, 1)  ; save line so it's available to (P)aste
+  
+              vtui.gotoxy(main.minCol,1+main.line)
+              vtui.save_rect($80, 1, $0400, 74, 1)  ; save line to move up 
+  
+              vtui.gotoxy(main.minCol,1+main.line)
+              vtui.save_rect($80, 1, $0400, 74, 1)  ; save line to move up 
+  
+              vtui.gotoxy(main.minCol,1+main.line)
+              vtui.fill_box(' ', 74, 1, $c6)        ; blank out line being moved in original position 
+  
+              vtui.gotoxy(main.minCol,main.line)
+              vtui.rest_rect($80, 1, $0400, 74, 1)  ; restore line being moved up 
+  
+              vtui.gotoxy(main.col,main.line)
+              vtui.save_rect($80, 1, $0100, 1, 1)   ; save what is under cursor for save_rect
+  
+              ubyte j
+              for j in main.line+1 to main.maxLine-1 {
+                vtui.gotoxy(main.minCol,j+1)
+                vtui.save_rect($80, 1, $0400, 74, 1)  ; save line 
+                vtui.gotoxy(main.minCol,j)
+                vtui.rest_rect($80, 1, $0400, 74, 1)  ; restore rectangle
+              }
 
-            vtui.gotoxy(main.minCol,main.line)    ; stay on current line, go to starting col
-            vtui.fill_box(' ', 75, 1, $c6)        ; draw over (eventually needs to shift up
+              vtui.gotoxy(main.minCol,main.maxLine)
+              vtui.fill_box(' ', 74, 1, $c6)
 
-            if newy < maxLine {
-              newy++
+              vtui.gotoxy(main.col,main.line)
+              vtui.rest_rect($80, 1, $0100, 1, 1)     ; restore what is under cursor for save_rect
+
+              vtui.gotoxy(main.col,main.line)
+              vtui.save_rect($80, 1, $0100, 1, 1)   ; save what is under cursor for save_rect
+
+              vtui.gotoxy(main.col,main.line)
+              vtui.rest_rect($80, 1, $0000, 1, 1)   ; restore cursor
             }
+          }
+          $59 -> { ; copy (Y), no cursor advancement
+            vtui.gotoxy(main.col,main.line)
+            vtui.rest_rect($80, 1, $0100, 1, 1)   ; restore what is under cursor for save_rect
+            vtui.gotoxy(main.minCol,main.line)
+            vtui.save_rect($80, 1, $0022, 74, 1)  ; save line 
+            vtui.gotoxy(main.col,main.line)
+            vtui.rest_rect($80, 1, $0000, 1, 1)   ; restore cursor where user last saw it
+
+            newx = main.col
+            newy = main.line
             move_cursor()
             updateXY_ticker()
           }
           $50 -> { ; paste (P)
-            ubyte prevy = main.line
-            if newy < maxLine {
-              newy++
-              move_cursor()
-              updateXY_ticker()
-
-              vtui.gotoxy(main.minCol,prevy)
-              vtui.rest_rect($80, 1, $0022, 74, 1)  ; restore saved memory here
-            }
-            else {
-              vtui.rest_rect($80, 1, $0022, 74, 1)  ; restore saved memory here
-              vtui.gotoxy(main.minCol,prevy)
-              vtui.save_rect($80, 1, $0100, 1, 1)
+            ; do update stuff
+            vtui.gotoxy(main.minCol,main.line)
+            vtui.rest_rect($80, 1, $0022, 74, 1)  ; restore rectangle
+            vtui.gotoxy(main.col,main.line)
+            vtui.save_rect($80, 1, $0100, 1, 1)   ; save what's going underneath cursor
+            vtui.gotoxy(main.col,main.line)
+            vtui.rest_rect($80, 1, $0000, 1, 1)   ; restore cursor where user last saw it
+            ; move down if at top line
+            if  newy != main.maxLine {
+              newy++ 
             }
             move_cursor()
             updateXY_ticker()
@@ -234,6 +276,12 @@ navcharloop:
        vtui.save_rect($80, 1, $0100, 1, 1)
        vtui.gotoxy(newx, newy)
        vtui.rest_rect($80, 1, $0000, 1, 1)
+       main.col  = newx
+       main.line = newy
+     }
+     sub move_cursor_no_restore() {
+       vtui.gotoxy(newx, newy)
+       vtui.save_rect($80, 1, $0100, 1, 1)
        main.col  = newx
        main.line = newy
      }
