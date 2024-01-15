@@ -16,23 +16,48 @@ main {
     ubyte col     = minCol
     ubyte Y       = 0
 
+    sub vtg(ubyte x, ubyte y) {
+      vtui.gotoxy(x,y)
+    }
+
     sub init_canvas() {
         vtui.initialize()
         vtui.screen_set(0)
         vtui.clr_scr(' ', $50)
-        vtui.gotoxy(2,2)
+        vtg(2,2)
         vtui.fill_box(' ', 76, 56, $c6)
-        vtui.gotoxy(2,2)
+        vtg(2,2)
         vtui.border(1, 76, 56, $00)
+    }
+
+    sub blank_line(ubyte line)  {
+      vtg(main.minCol,line)
+      vtui.fill_box(' ', 74, 1, $c6)      ; blank out line being moved in original position
+    }
+
+    sub copy_line(ubyte line, uword addr) {
+      vtg(main.minCol,line)
+      vtui.save_rect($80, 1, addr, 74, 1)  ; save line so it's available to (P)aste
+    }
+
+    sub cut_line(ubyte line, uword addr)  {
+      copy_line(line, addr)               ; copy
+      vtg(main.minCol,line)               ; go to line again, for "cut"
+      vtui.fill_box(' ', 74, 1, $c6)      ; blank out line being moved in original position
+    }
+
+    sub paste_line(ubyte line, uword addr) {
+      vtg(main.minCol,line)
+      vtui.rest_rect($80, 1, addr, 74, 1)  ; restore rectangle
     }
 
     sub updateXY_ticker() {
         ubyte x = main.col  ;cx16.VERA_ADDR_L / 2   ; cursor X coordinate
         ubyte y = main.line ;cx16.VERA_ADDR_M - $b0 ; cursor Y coordinate
 
-        vtui.gotoxy(68, 57)
+        vtg(68, 57)
         vtui.fill_box(' ', 7, 1, $00)
-        vtui.gotoxy(68, 57)
+        vtg(68, 57)
 
         conv.str_ub0(x-2)
         vtui.print_str2(conv.string_out, $01, true)
@@ -43,28 +68,34 @@ main {
         vtui.print_str2(",", $01, true)
         vtui.print_str2(conv.string_out, $01, true)
 
-        vtui.gotoxy(main.col,main.line)
+        vtg(main.col,main.line)
+    }
+
+    sub draw_cursor(ubyte col, ubyte line) {
+        vtg(col,line);
+        vtui.fill_box(' ', 1, 1, $e1)
+    }
+
+    sub init_spot(ubyte col, ubyte line) {
+        vtg(col,line);
+        vtui.save_rect($80, 1, $0000, 1, 1)
+    }
+
+    sub init_cursor(ubyte col, ubyte line) {
+        vtg(col,line);
+        vtui.save_rect($80, 1, $0100, 1, 1)
+        draw_cursor(col,line)
+        init_spot(col,line)
     }
 
     sub start() {
         init_canvas()
-
-        ; init saved chars for non-destructive cursor moves
-        vtui.gotoxy(main.minCol,main.minLine);
-        vtui.save_rect($80, 1, $0100, 1, 1)
-
-        ; place cursor initial position
-        vtui.gotoxy(main.minCol,main.minLine);
-        vtui.fill_box(' ', 1, 1, $e1)
-
-        vtui.gotoxy(main.minCol,main.minLine);
-        vtui.save_rect($80, 1, $0000, 1, 1)
-
-        navMode()
+        init_cursor(main.minCol,main.minLine)
+        navMode() ; start off in nav mode, which is expected
 
         str inputbuffer = "?" * 73 ; this is the width of the inner box vtui box
         while 1 {
-           vtui.gotoxy(main.col,main.line)
+           vtg(main.col,main.line)
            updateXY_ticker()
 
            ; if the last key is ESC, input_str will exit - we check to see
@@ -107,22 +138,20 @@ navcharloop:
       when char {
           $c7 -> { ; jump to the bottom (SHIFT+g)
             if nngN == 1 {
-              nngN = 0          ; reset digit counter for "NN SHIFT+g"
               newy = main.minLine - 1 + numb[0]
+            }
+            if nngN == 2 {
+              newy = main.minLine - 1 + (numb[0]*10+numb[1])
+            }
+            if nngN == 1 or nngN == 2 {
+              nngN = 0          ; reset digit counter for "NN SHIFT+g"
               newx = main.minCol
               move_cursor()
               goto navcharloop
             }
-            else if nngN == 2 {
-              nngN = 0          ; reset digit counter for "NN SHIFT+g"
-              newy = main.minLine - 1 + (numb[0]*10+numb[1])
-              newx = main.minCol
-              move_cursor()
-              goto navcharloop
-            } 
             ; pass through since SHIFT+g is used below by itself
           }
-          $30,$31,$32,$33,$34,$35,$36,$37,$38,$39 -> { ; digit 1
+          $30,$31,$32,$33,$34,$35,$36,$37,$38,$39 -> { ; digits 0-9
             if nngN < 2 {
               numb[nngN] = char - $30
               nngN++
@@ -171,7 +200,7 @@ navcharloop:
             move_cursor()
           }
           $58 -> { ; delete, move left (x)
-            vtui.gotoxy(main.col,main.line)
+            vtg(main.col,main.line)
             vtui.fill_box(' ', 1, 1, $c6)
             vtui.save_rect($80, 1, $0100, 1, 1)
             if newx > minCol {
@@ -188,59 +217,50 @@ navcharloop:
             move_cursor()
           }
           $44 -> { ; cut (d+d) delete current line, shift all lines from main.line to main.maxLine up 1
-;            when delN {
-;              0 -> {
-;                delN++
-;                goto navcharloop
-;              }
-;              1 -> {
-;                delN = 0
-;              }
-;            }
-;
-;            ; do delete
-;            if main.line+1 <= main.maxLine {
-;              vtui.gotoxy(main.col,main.line)
-;              vtui.rest_rect($80, 1, $0100, 1, 1)   ; restore what is under cursor for save_rect
-;  
-;              vtui.gotoxy(main.minCol,main.line)
-;              vtui.save_rect($80, 1, $0022, 74, 1)  ; save line so it's available to (P)aste
-;  
-;              vtui.gotoxy(main.minCol,1+main.line)
-;              vtui.save_rect($80, 1, $0400, 74, 1)  ; save line to move up 
-;  
-;              vtui.gotoxy(main.minCol,1+main.line)
-;              vtui.save_rect($80, 1, $0400, 74, 1)  ; save line to move up 
-;  
-;              vtui.gotoxy(main.minCol,1+main.line)
-;              vtui.fill_box(' ', 74, 1, $c6)        ; blank out line being moved in original position 
-;  
-;              vtui.gotoxy(main.minCol,main.line)
-;              vtui.rest_rect($80, 1, $0400, 74, 1)  ; restore line being moved up 
-;  
-;              vtui.gotoxy(main.col,main.line)
-;              vtui.save_rect($80, 1, $0100, 1, 1)   ; save what is under cursor for save_rect
-;  
+            when delN {
+              0 -> {
+                delN++
+                goto navcharloop
+              }
+              1 -> {
+                delN = 0
+              }
+            }
+
+            ; do delete
+            if main.line+1 <= main.maxLine {
+              vtg(main.col,main.line)
+              vtui.rest_rect($80, 1, $0100, 1, 1)   ; restore what is under cursor for save_rect
+
+              copy_line(main.line, $0022)
+
+              ; cut
+              copy_line(1+main.line, $0400)         ; save line to move up
+              blank_line(1+main.line)
+
+              ; paste
+              paste_line(main.line, $0400)          ; restore line being moved up
+
+              vtg(main.col,main.line)
+              vtui.save_rect($80, 1, $0100, 1, 1)   ; save what is under cursor for save_rect
+
               ubyte j
-;              for j in main.line+1 to main.maxLine-1 {
-;                vtui.gotoxy(main.minCol,j+1)
-;                vtui.save_rect($80, 1, $0400, 74, 1)  ; save line
-;                vtui.gotoxy(main.minCol,j)
-;                vtui.rest_rect($80, 1, $0400, 74, 1)  ; restore rectangle
-;              }
-;
-;              vtui.gotoxy(main.minCol,main.maxLine) ; <~ confirm what this line is doing
-;              vtui.fill_box(' ', 74, 1, $c6)
-;
-;              vtui.gotoxy(main.col,main.line)
-;              vtui.rest_rect($80, 1, $0100, 1, 1)   ; restore what is under cursor for save_rect
-;
-;              vtui.gotoxy(main.col,main.line)
-;              vtui.save_rect($80, 1, $0100, 1, 1)   ; save what is under cursor for save_rect
-;
-;              vtui.gotoxy(main.col,main.line)
-;              vtui.rest_rect($80, 1, $0000, 1, 1)   ; restore cursor
-;            }
+              for j in main.line+1 to main.maxLine-1 {
+                copy_line(j+1, $0400) ; save line
+                paste_line(j, $0400)  ; restore rectangle
+              }
+
+              blank_line(main.maxLine)              ; <~ confirm what this line is doing (replace when handling files that are more than 56 lines)
+
+              vtg(main.col,main.line)
+              vtui.rest_rect($80, 1, $0100, 1, 1)   ; restore what is under cursor for save_rect
+
+              vtg(main.col,main.line)
+              vtui.save_rect($80, 1, $0100, 1, 1)   ; save what is under cursor for save_rect
+
+              vtg(main.col,main.line)
+              vtui.rest_rect($80, 1, $0000, 1, 1)   ; restore cursor
+            }
           }
           $59 -> { ; copy (Y+Y), no cursor advancement
             when cpyN {
@@ -254,11 +274,12 @@ navcharloop:
             }
 
             ; do copy
-            vtui.gotoxy(main.col,main.line)
+            vtg(main.col,main.line)
             vtui.rest_rect($80, 1, $0100, 1, 1)   ; restore what is under cursor for save_rect
-            vtui.gotoxy(main.minCol,main.line)
-            vtui.save_rect($80, 1, $0022, 74, 1)  ; save line 
-            vtui.gotoxy(main.col,main.line)
+
+            copy_line(main.line,$0022)
+
+            vtg(main.col,main.line)
             vtui.rest_rect($80, 1, $0000, 1, 1)   ; restore cursor where user last saw it
 
             newx = main.col
@@ -276,23 +297,22 @@ navcharloop:
           $50 -> { ; paste (p)
             down_shift()
             ; do update stuff
-            vtui.gotoxy(main.minCol,main.line)
-            vtui.rest_rect($80, 1, $0022, 74, 1)  ; restore rectangle
-            vtui.gotoxy(main.col,main.line)
+            paste_line(main.line, $0022)
+            vtg(main.col,main.line)
             vtui.save_rect($80, 1, $0100, 1, 1)   ; save what's going underneath cursor
-            vtui.gotoxy(main.col,main.line)
+            vtg(main.col,main.line)
             vtui.rest_rect($80, 1, $0000, 1, 1)   ; restore cursor where user last saw it
           }
           $3a -> { ; colon (:)
-            vtui.gotoxy(2,58);
+            vtg(2,58);
             vtui.fill_box(' ', 50, 1, $06)
-            vtui.gotoxy(2,58);
+            vtg(2,58);
             vtui.print_str2(": ", $01, true);
             str cmdbuffer = " " * 10
-            vtui.gotoxy(3,58);
+            vtg(3,58);
             vtui.input_str(cmdbuffer, 10, $01)
             if (cmdbuffer[0] == 'q') {
-              vtui.gotoxy(1,1)
+              vtg(1,1)
               txt.clear_screen()
               txt.print("thank you for using vicl1, the vi clone for the x16!\n\n")
               txt.print("for updates, please visit\n\n")
@@ -300,13 +320,13 @@ navcharloop:
               sys.exit(0)
             }
             else {
-              vtui.gotoxy(2,58);
+              vtg(2,58);
               vtui.fill_box(' ', 50, 1, $21)
-              vtui.gotoxy(2,58);
+              vtg(2,58);
               vtui.print_str2("not an editor command: ", $21, true)
               vtui.print_str2(cmdbuffer, $21, true)
               sys.wait(50)
-              vtui.gotoxy(2,58);
+              vtg(2,58);
               vtui.fill_box(' ', 50, 1, $50)
             }
           }
@@ -315,24 +335,17 @@ navcharloop:
      sub down_shift() {
        ubyte j = main.maxLine
        while j != main.line {
-         vtui.gotoxy(main.minCol,j-1) ; jump to next line
-         vtui.save_rect($80, 1, $0400, 74, 1)    ; copy line 
-
-         vtui.gotoxy(main.minCol,j-1) ; jump to next line
-         vtui.fill_box(' ', 74, 1, $c6)          ; blank out line being moved in original position 
-
-         vtui.gotoxy(main.minCol,j)  ; jump to next line
-         vtui.rest_rect($80, 1, $0400, 74, 1)   ; restore rectangle
-
+         cut_line(j-1, $0400) ; copy  line
+         paste_line(j, $0400) ; paste line
          j--
        }
      }
      sub move_cursor() {
-       vtui.gotoxy(main.col, main.line)
+       vtg(main.col, main.line)
        vtui.rest_rect($80, 1, $0100, 1, 1)
-       vtui.gotoxy(newx, newy)
+       vtg(newx, newy)
        vtui.save_rect($80, 1, $0100, 1, 1)
-       vtui.gotoxy(newx, newy)
+       vtg(newx, newy)
        vtui.rest_rect($80, 1, $0000, 1, 1)
        main.col  = newx
        main.line = newy
