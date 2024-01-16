@@ -9,6 +9,12 @@ Work in progress. YMMV.
 
 Current latest binary, https://github.com/oodler577/VICL1/raw/master/vi
 
+Run with x16emu,
+
+```
+x16emu -prg vi -quality best -scale 2 -run 
+```
+
 https://github.com/oodler577/VICL1/assets/69679854/bcadc3b5-d4fd-4f85-ab35-cbc44fc737a0
 
 
