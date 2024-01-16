@@ -1,7 +1,8 @@
-%import   textio
-%import   conv
-%import   syslib
-%option   no_sysinit
+%import textio
+%import conv
+%import syslib
+%import diskio
+%option no_sysinit
 %zeropage basicsafe
 
 ; simple test program for the "VTUI" text user interface library
@@ -76,14 +77,28 @@ main {
         vtui.fill_box(' ', 1, 1, $e1)
     }
 
-    sub init_spot(ubyte col, ubyte line) {
+    sub init_spot(ubyte col, ubyte line) {  ; this is only used once in the beginning
         vtg(col,line);
-        vtui.save_rect($80, 1, $0000, 1, 1)
+        vtui.save_rect($80, 1, $0000, 1, 1) ; initialize what will be the cursor
     }
 
-    sub init_cursor(ubyte col, ubyte line) {
-        vtg(col,line);
-        vtui.save_rect($80, 1, $0100, 1, 1)
+    sub cursor_presave(ubyte x, ubyte y) {
+      vtg(x,y)
+      vtui.save_rect($80, 1, $0100, 1, 1)   ; save what is under cursor for save_rect
+    }
+
+    sub cursor_restore(ubyte x, ubyte y) {
+      vtg(x,y)
+      vtui.rest_rect($80, 1, $0100, 1, 1)   ; restore what is under cursor for save_rect
+    }
+
+    sub place_cursor(ubyte x, ubyte y) {
+      vtg(x,y)
+      vtui.rest_rect($80, 1, $0000, 1, 1)   ; restore cursor
+    }
+
+    sub init_cursor(ubyte col, ubyte line) {; full initial set up of cursor
+        cursor_presave(col,line);
         draw_cursor(col,line)
         init_spot(col,line)
     }
@@ -229,8 +244,7 @@ navcharloop:
 
             ; do delete
             if main.line+1 <= main.maxLine {
-              vtg(main.col,main.line)
-              vtui.rest_rect($80, 1, $0100, 1, 1)   ; restore what is under cursor for save_rect
+              cursor_restore(main.col,main.line)    ; restore what is under cursor
 
               copy_line(main.line, $0022)
 
@@ -240,9 +254,7 @@ navcharloop:
 
               ; paste
               paste_line(main.line, $0400)          ; restore line being moved up
-
-              vtg(main.col,main.line)
-              vtui.save_rect($80, 1, $0100, 1, 1)   ; save what is under cursor for save_rect
+              cursor_presave(main.col, main.line)   ; save what's in the space the cursor is about to occupy 
 
               ubyte j
               for j in main.line+1 to main.maxLine-1 {
@@ -251,15 +263,10 @@ navcharloop:
               }
 
               blank_line(main.maxLine)              ; <~ confirm what this line is doing (replace when handling files that are more than 56 lines)
-
-              vtg(main.col,main.line)
-              vtui.rest_rect($80, 1, $0100, 1, 1)   ; restore what is under cursor for save_rect
-
-              vtg(main.col,main.line)
-              vtui.save_rect($80, 1, $0100, 1, 1)   ; save what is under cursor for save_rect
-
-              vtg(main.col,main.line)
-              vtui.rest_rect($80, 1, $0000, 1, 1)   ; restore cursor
+              cursor_restore(main.col,main.line)
+              cursor_presave(main.col, main.line)   ; save what's in the space the cursor is about to occupy 
+              cursor_restore(main.col,main.line)
+              place_cursor(main.col,main.line)
             }
           }
           $59 -> { ; copy (Y+Y), no cursor advancement
@@ -274,34 +281,41 @@ navcharloop:
             }
 
             ; do copy
-            vtg(main.col,main.line)
-            vtui.rest_rect($80, 1, $0100, 1, 1)   ; restore what is under cursor for save_rect
+            cursor_restore(main.col,main.line)      ; restore what is under cursor for save_rect
 
             copy_line(main.line,$0022)
 
-            vtg(main.col,main.line)
-            vtui.rest_rect($80, 1, $0000, 1, 1)   ; restore cursor where user last saw it
+            place_cursor(main.col,main.line)        ; place cursor where user last saw it
 
             newx = main.col
             newy = main.line
             move_cursor()
           }
           $4f -> { ; lowercase "oh" (o), insert line below; switch to INSERT mode
-            down_shift()
+            down_shift_o()
+            newx = main.minCol
+            if main.line != 56 {
+              newy = main.line + 1
+            }
             move_cursor()
             goto main.start.edit_mode
           }
-          ;$cf -> { ; uppercase "oh" (SHIFT+o), insert line above
-          ;  goto main.start.edit_mode
-          ;}
+          $cf -> { ; uppercase "oh" (SHIFT+o), insert line above
+            down_shift_O()
+            newx = main.minCol
+            newy = main.line
+            move_cursor()
+            goto main.start.edit_mode
+          }
           $50 -> { ; paste (p)
-            down_shift()
+            down_shift_o()
+
             ; do update stuff
             paste_line(main.line, $0022)
-            vtg(main.col,main.line)
-            vtui.save_rect($80, 1, $0100, 1, 1)   ; save what's going underneath cursor
-            vtg(main.col,main.line)
-            vtui.rest_rect($80, 1, $0000, 1, 1)   ; restore cursor where user last saw it
+
+            cursor_presave(main.col,main.line)      ; save what's going underneath cursor
+
+            place_cursor(main.col,main.line)        ; restore cursor where user last saw it
           }
           $3a -> { ; colon (:)
             vtg(2,58);
@@ -332,21 +346,30 @@ navcharloop:
           }
      }
      goto navcharloop
-     sub down_shift() {
-       ubyte j = main.maxLine
-       while j != main.line {
-         cut_line(j-1, $0400) ; copy  line
+     sub down_shift_o() {
+       ubyte j
+       for j in main.maxLine-1 to main.line+1 step -1 { ; descending from 2nd to last line to current line
+         if j == main.line {  ; break if the first line is hit
+           break
+         }
+         cut_line(j, $0400) ; copy line
+         paste_line(j+1, $0400) ; paste line
+       }
+     }
+     sub down_shift_O() {
+       ubyte j
+       for j in main.maxLine-1 to main.line+1 step -1 { ; descending from 2nd to last line to current line
+         if j == main.line {  ; break if the first line is hit
+           break
+         }
+         cut_line(j-1, $0400) ; copy line
          paste_line(j, $0400) ; paste line
-         j--
        }
      }
      sub move_cursor() {
-       vtg(main.col, main.line)
-       vtui.rest_rect($80, 1, $0100, 1, 1)
-       vtg(newx, newy)
-       vtui.save_rect($80, 1, $0100, 1, 1)
-       vtg(newx, newy)
-       vtui.rest_rect($80, 1, $0000, 1, 1)
+       cursor_restore(main.col, main.line)   ; restore what was under the cursor
+       cursor_presave(newx, newy)            ; save what's current in the new position
+       place_cursor(newx, newy)              ; place cursor in new position
        main.col  = newx
        main.line = newy
        updateXY_ticker()
