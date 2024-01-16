@@ -7,6 +7,8 @@ Contributors welcome. Find me on the official [cx16 Discord](https://www.command
 
 Work in progress. YMMV.
 
+Current latest binary, https://github.com/oodler577/VICL1/raw/master/vi
+
 https://github.com/oodler577/VICL1/assets/69679854/bcadc3b5-d4fd-4f85-ab35-cbc44fc737a0
 
 
