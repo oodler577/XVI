@@ -283,12 +283,23 @@ navcharloop:
             move_cursor(main.minCol,main.line)
             goto main.start.edit_mode
           }
-          $50 -> { ; paste (p)
+          $50 -> { ; paste below (p)
             down_shift_o()
-            ; do update stuff
+            move_cursor(main.minCol,main.line+1)
             paste_line(main.line, $7600)
-            cursor_presave(main.col,main.line)      ; save what's going underneath cursor
-            place_cursor(main.col,main.line)        ; restore cursor where user last saw it
+            cursor_presave(main.col, main.line)      ; save what's current in the new position
+            move_cursor(main.minCol,main.line)
+            update_activity("paste below!")
+            update_activity("nav")
+          }
+          $D0 -> { ; paste above (SHIFT+p)
+            down_shift_O()
+            move_cursor(main.minCol,main.line)
+            paste_line(main.line, $7600)
+            cursor_presave(main.col, main.line)      ; save what's current in the new position
+            move_cursor(main.minCol,main.line)
+            update_activity("paste above!")
+            update_activity("nav")
           }
           $3a -> { ; colon (:)
             vtg(2,58);
