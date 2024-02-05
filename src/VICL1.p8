@@ -2,6 +2,7 @@
 %import conv
 %import syslib
 %import diskio
+%import string
 %option no_sysinit
 %zeropage basicsafe
 
@@ -31,29 +32,34 @@ main {
       vtui.border(1, 76, 56, $00)
     }
 
-    sub blank_line(ubyte line)  {
-      vtg(main.minCol,line)
+    sub blank_line(ubyte y)  {
+      vtg(main.minCol,y)
       vtui.fill_box(' ', 74, 1, $c6)      ; blank out line being moved in original position
     }
 
-    sub blank_space(ubyte x, ubyte y)  {
+    sub blank_1x1(ubyte x, ubyte y)  {
       vtg(x,y)
       vtui.fill_box(' ', 1, 1, $c6)      ; blank out line being moved in original position
     }
 
-    sub copy_line(ubyte line, uword addr) {
-      vtg(main.minCol,line)
+    sub copy_line(ubyte y, uword addr) {
+      vtg(main.minCol,y)
       vtui.save_rect($80, 1, addr, 74, 1)  ; save line so it's available to (P)aste
     }
 
-    sub cut_line(ubyte line, uword addr)  {
+    sub copy_1x1(ubyte y, uword addr) {
+      vtg(main.minCol,y)
+      vtui.save_rect($80, 1, addr, 1, 1)  ; save line so it's available to (P)aste
+    }
+
+    sub cut_line(ubyte y, uword addr)  {
       copy_line(line, addr)               ; copy
-      vtg(main.minCol,line)               ; go to line again, for "cut"
+      vtg(main.minCol,y)                  ; go to line again, for "cut"
       vtui.fill_box(' ', 74, 1, $c6)      ; blank out line being moved in original position
     }
 
-    sub paste_line(ubyte line, uword addr) {
-      vtg(main.minCol,line)
+    sub paste_line(ubyte y, uword addr) {
+      vtg(main.minCol,y)
       vtui.rest_rect($80, 1, addr, 74, 1)  ; restore rectangle
     }
 
@@ -77,13 +83,13 @@ main {
         vtg(main.col,main.line)
     }
 
-    sub draw_cursor(ubyte col, ubyte line) {
-        vtg(col,line);
+    sub draw_cursor(ubyte x, ubyte y) {
+        vtg(x,y);
         vtui.fill_box(' ', 1, 1, $e1)
     }
 
-    sub init_spot(ubyte col, ubyte line) {  ; this is only used once in the beginning
-        vtg(col,line);
+    sub init_spot(ubyte x, ubyte y) {  ; this is only used once in the beginning
+        vtg(x,y);
         vtui.save_rect($80, 1, $0000, 1, 1) ; initialize what will be the cursor
     }
 
@@ -102,39 +108,70 @@ main {
       vtui.rest_rect($80, 1, $0000, 1, 1)   ; restore cursor
     }
 
-    sub init_cursor(ubyte col, ubyte line) {; full initial set up of cursor
-        cursor_presave(col,line);
-        draw_cursor(col,line)
-        init_spot(col,line)
+    sub init_cursor(ubyte x, ubyte y) {; full initial set up of cursor
+        cursor_presave(x,y);
+        draw_cursor(x,y)
+        init_spot(x,y)
+    }
+
+    sub restore_border() {
+        vtg(main.maxCol+1,main.line)
+        vtui.fill_box(' ', 1, 1, $00)
+        vtg(main.maxCol+2,main.line)
+        vtui.fill_box(' ', 3, 1, $50)
+        vtg(main.col,main.line)
+    }
+
+    sub open_file(str filepath) {
+        if diskio.f_open(filepath) {
+          move_cursor(main.minCol,main.line)
+          repeat 53 {
+            str foo = " " * 75
+            uword size = diskio.f_readline(foo)
+            vtui.print_str2(foo, $c6, true)
+            cursor_presave(main.col,main.line)
+            move_cursor(main.minCol, main.line+1)
+          }
+          diskio.f_close()
+        }
+        else {
+          txt.print("oof error opening ")
+          txt.print(filepath) 
+          txt.print("...") 
+        }
     }
 
     sub start() {
         init_canvas()
         init_cursor(main.minCol,main.minLine)
-        navMode() ; start off in nav mode, which is expected
 
-        str inputbuffer = "?" * 73 ; this is the width of the inner box vtui box
-        while 1 {
+        str initfile = "samples/sample1.txt"
+        ;open_file(initfile)
+
+        move_cursor(main.minCol,main.minLine)
+
+        navMode() ; start off in nav mode, which is expected
+        ubyte cond = 1
+        while cond {
            vtg(main.col,main.line)
+           ubyte buff_size = (main.maxCol-main.col+1)
+           str inputbuffer = "?" * 73 ; this is the width of the inner box vtui box
            updateXY_ticker()
 
            ; if the last key is ESC, input_str will exit - we check to see
            ; if it was ESC (not RET), put in navMode if ESC, go to next line
            ; in "editMode" if not - getting very close to vi-like modalities
 
-           uword AX       = vtui.input_str_retboth(inputbuffer, len(inputbuffer), $c6)
+           uword AX       = vtui.input_str_retboth(inputbuffer, buff_size, $c6)
            ubyte lastkey  = lsb(AX)
            ubyte inputLen = msb(AX)
 
-           vtg(main.maxCol+1,main.line)
-           vtui.fill_box(' ', 1, 1, $00)
-           vtg(main.maxCol+2,main.line)
-           vtui.fill_box(' ', 3, 1, $50)
-           vtg(main.col,main.line)
+           restore_border();
 
-           if lastkey == $1b {                ; $1b is <ESC>
+           if lastkey == $1b {                  ; $1b is <ESC>
              main.col  = cx16.VERA_ADDR_L / 2   ; cursor X coordinate
              main.line = cx16.VERA_ADDR_M - $b0 ; cursor Y coordinate
+             move_cursor(main.col, main.line)
              updateXY_ticker()
              navMode()
            }
@@ -142,10 +179,12 @@ main {
            main.col  = 3
            main.line = main.line + 1
 edit_mode:
+           update_activity("edit mode")
         }
    }
 
    sub navMode() {
+      update_activity("nav mode")
       updateXY_ticker()
 navstart:
       vtui.fill_box(' ', 1, 1, $e1)
@@ -153,10 +192,8 @@ navstart:
       ubyte    cpyN  = 0    ; YY (copy) counter
       ubyte    nngN  = 0    ; NN SHIFT+g counter
       ubyte[2] numb  = 0    ; digit for "NN SHIFT+g"
-      str      digit = "??"
+
 navcharloop:
-      ubyte newx = main.col
-      ubyte newy = main.line
       ubyte char = cbm.GETIN()
 
       ; catch leading numbers for "NN SHIFT+g"
@@ -216,10 +253,13 @@ navcharloop:
             move_cursor(main.minCol,main.maxLine)
           }
           $58 -> { ; delete, move left (x)
+            copy_1x1(main.line, $7600)           ; paste buffer (not used)
             left_shift_x()
           }
+          $20 -> {
+            right_shift_spc()
+          }
           $5E -> { ; ^ (SHIFT+6), jump to start of the line
-            newx = main.minCol
             move_cursor(main.minCol,main.line)
           }
           $24 -> { ; $ (SHIFT+4), jump to start of the line
@@ -249,10 +289,7 @@ navcharloop:
                 paste_line(j, $7000)                ; restore rectangle
               }
               blank_line(main.maxLine)              ; <~ confirm what this line is doing (replace when handling files that are more than 56 lines)
-              cursor_restore(main.col,main.line)
-              cursor_presave(main.col, main.line)   ; save what's in the space the cursor is about to occupy 
-              cursor_restore(main.col,main.line)
-              place_cursor(main.col,main.line)
+              move_cursor(main.minCol, main.line)
             }
           }
           $59 -> { ; copy (Y+Y), no cursor advancement
@@ -272,7 +309,6 @@ navcharloop:
           }
           $4f -> { ; lowercase "oh" (o), insert line below; switch to INSERT mode
             down_shift_o()
-            newx = main.minCol
             if main.line < 56 {
               move_cursor(main.col,main.line+1)
             }
@@ -306,9 +342,9 @@ navcharloop:
             vtui.fill_box(' ', 50, 1, $06)
             vtg(2,58);
             vtui.print_str2(": ", $01, true);
-            str cmdbuffer = " " * 10
+            str cmdbuffer = " " * 50
             vtg(3,58);
-            vtui.input_str(cmdbuffer, 10, $01)
+            ubyte retval = vtui.input_str(cmdbuffer, 50, $01)
             if (cmdbuffer[0] == 'q') {
               vtg(1,1)
               txt.clear_screen()
@@ -316,6 +352,14 @@ navcharloop:
               txt.print("for updates, please visit\n\n")
               txt.print("https://github.com/oodler577/vicl1\n")
               sys.exit(0)
+            }
+            else if (cmdbuffer[0] == 'e') {
+              str fn = " " * 9 
+              string.slice(cmdbuffer, 2, 9, fn)
+              open_file(fn)
+        ;open_file("samples/sample1.txt")
+              vtg(2,58);
+              vtui.fill_box(' ', 50, 1, $50)
             }
             else {
               vtg(2,58);
@@ -332,24 +376,56 @@ navcharloop:
      goto navcharloop
    }
 
-   sub left_shift_x()  {
-     ubyte j
-     blank_space(main.maxCol, main.line)
-     for j in main.col to main.maxCol-1 {  ; 
-       vtg(j+1,main.line)
+   sub update_activity(str activity) {
+     vtg(65, 2) 
+     vtui.fill_box(' ', 12, 1, $00)
+     vtg(65, 2)
+     vtui.print_str2(activity, $01, true)
+     vtg(main.col,main.line)
+   } 
+
+   sub right_shift_spc()  {
+     ubyte i
+     for i in main.maxCol downto main.col+1 {
+       vtg(i,main.line)
        vtui.save_rect($80, 1, $7000, 1, 1); save line so it's available to (P)aste
-       vtg(j,main.line)
+       blank_1x1(main.col,main.line)
+       vtg(i+1,main.line)
+       vtui.rest_rect($80, 1, $7000, 1, 1); restore line so it's available to (P)aste
+     }
+     vtg(main.col,main.line)
+     vtui.rest_rect($80, 1, $0100, 1, 1)  ; save line so it's available to (P)aste
+     vtg(main.col,main.line)
+     vtui.save_rect($80, 1, $7000, 1, 1)  ; save line so it's available to (P)aste
+
+     blank_1x1(main.col,main.line)
+     cursor_presave(main.col,main.line)
+
+     vtg(main.col+1,main.line)
+     vtui.rest_rect($80, 1, $7000, 1, 1)  ; restore line so it's available to (P)aste
+
+     cursor_restore(main.col,main.line)   ; restore what is under cursor for save_rect
+     move_cursor(main.col+1,main.line)
+   }
+
+   sub left_shift_x()  {
+     ubyte i
+     blank_1x1(main.maxCol, main.line)
+     for i in main.col to main.maxCol-1 {  ; 
+       vtg(i+1,main.line)
+       vtui.save_rect($80, 1, $7000, 1, 1); save line so it's available to (P)aste
+       vtg(i,main.line)
        vtui.rest_rect($80, 1, $7000, 1, 1); save line so it's available to (P)aste
      }
-     blank_space(main.maxCol,main.line)
+     blank_1x1(main.maxCol,main.line)
      cursor_presave(main.col,main.line)
      move_cursor(main.col,main.line)
    }
 
    sub down_shift_o() {
-     ubyte j
-     for j in main.maxLine-1 to main.line+1 step -1 { ; descending from 2nd to last line to current line
-       if j == main.line {  ; break if the first line is hit
+     ubyte i
+     for i in main.maxLine-1 to main.line+1 step -1 { ; descending from 2nd to last line to current line
+       if i == main.line {  ; break if the first line is hit
          break
        }
        cut_line(j, $7000) ; copy line
@@ -358,9 +434,9 @@ navcharloop:
    }
 
    sub down_shift_O() {
-     ubyte j
-     for j in main.maxLine-1 to main.line+1 step -1 { ; descending from 2nd to last line to current line
-       if j == main.line {  ; break if the first line is hit
+     ubyte i
+     for i in main.maxLine-1 to main.line+1 step -1 { ; descending from 2nd to last line to current line
+       if i == main.line {  ; break if the first line is hit
          break
        }
        cut_line(j-1, $7000) ; copy line
