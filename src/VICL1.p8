@@ -128,11 +128,16 @@ main {
           repeat 53 {
             str foo = " " * 75
             uword size = diskio.f_readline(foo)
+            string.rstrip(foo)
+            blank_line(main.line)
+            vtg(main.minCol,main.line)
             vtui.print_str2(foo, $c6, true)
             cursor_presave(main.col,main.line)
             move_cursor(main.minCol, main.line+1)
+
           }
           diskio.f_close()
+          move_cursor(main.minCol,main.minLine)
         }
         else {
           txt.print("oof error opening ")
@@ -146,7 +151,7 @@ main {
         init_cursor(main.minCol,main.minLine)
 
         str initfile = "samples/sample1.txt"
-        ;open_file(initfile)
+        open_file("default.txt")
 
         move_cursor(main.minCol,main.minLine)
 
@@ -354,10 +359,10 @@ navcharloop:
               sys.exit(0)
             }
             else if (cmdbuffer[0] == 'e') {
-              str fn = " " * 9 
-              string.slice(cmdbuffer, 2, 9, fn)
+              str fn = " " * 50 
+              string.slice(cmdbuffer, 2, string.length(cmdbuffer), fn)
+              string.strip(fn)
               open_file(fn)
-        ;open_file("samples/sample1.txt")
               vtg(2,58);
               vtui.fill_box(' ', 50, 1, $50)
             }
@@ -365,12 +370,14 @@ navcharloop:
               vtg(2,58);
               vtui.fill_box(' ', 50, 1, $21)
               vtg(2,58);
-              vtui.print_str2("not an editor command: ", $21, true)
+              vtui.print_str2("not an editor command ", $21, true)
+              string.strip(cmdbuffer)
               vtui.print_str2(cmdbuffer, $21, true)
               sys.wait(50)
               vtg(2,58);
-              vtui.fill_box(' ', 50, 1, $50)
+              vtui.fill_box(' ', 50+string.length(cmdbuffer), 1, $50)
             }
+            cmdbuffer = " " * 50
           }
      }
      goto navcharloop
