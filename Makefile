@@ -1,12 +1,12 @@
 all:
-	java -jar /Users/tempuser/Desktop/x16/prog8compiler-10.2-all.jar -target cx16 src/VICL1.p8
-	mv VICL1.prg vi
+	java -jar /Users/tempuser/Desktop/x16/prog8compiler-10.2-all.jar -target cx16 src/xvi.p8
+	mv xvi.prg xvi
 
 run:
-	x16emu -scale 2 -prg ./vi -run
+	x16emu -scale 2 -prg ./xvi -run
 
 test:
 	java -jar /Users/tempuser/Desktop/x16/prog8compiler-10.2-all.jar -target cx16 src/file-io-test.p8
 
 debug:
-	x16emu -scale 2 -prg ./vi -run -debug
+	x16emu -scale 2 -prg ./xvi -run -debug

@@ -7,16 +7,10 @@ Contributors welcome. Find me on the official [cx16 Discord](https://www.command
 
 Work in progress. YMMV.
 
-Current latest binary, https://github.com/oodler577/VICL1/raw/master/vi
+Current latest binary, https://github.com/oodler577/XVI/raw/master/xvi
 
 Run with x16emu,
 
 ```
-x16emu -quality best -scale 2 -run -prg ./vi
+x16emu -quality best -scale 2 -run -prg ./xvi
 ```
-
-https://github.com/oodler577/VICL1/assets/69679854/bcadc3b5-d4fd-4f85-ab35-cbc44fc737a0
-
-
-
-
