@@ -10,12 +10,12 @@
 ; see:  https://github.com/JimmyDansbo/VTUIlib
 
 main {
+    const ubyte minCol           = 2
+    const ubyte minLine          = 2
+    const ubyte maxCol           = 77
+    const ubyte maxLine          = 57
+    const ubyte BASE_LINE_SIZE   = (maxCol-minCol)+1
     ubyte i,j
-    ubyte minCol           = 2
-    ubyte minLine          = 2
-    ubyte maxCol           = 77
-    ubyte maxLine          = 57
-    ubyte BASE_LINE_SIZE   = (maxCol-minCol)+1
     ubyte LINE             = minLine
     ubyte COL              = minCol
     str currFilename       = " " * (maxCol-minCol)
@@ -39,22 +39,20 @@ main {
 
     sub blank_line(ubyte line)  {
       vtg(main.minCol, line)
-      vtui.fill_box(' ', BASE_LINE_SIZE, 1, $c6)      ; blank out line being moved in original position
+      vtui.fill_box(' ', BASE_LINE_SIZE, 1, $c6) ; blank out line being moved in original position
     }
 
     sub blank_1x1(ubyte col, ubyte line)  {
       vtg(col, line)
-      vtui.fill_box(' ', 1, 1, $c6)      ; blank out line being moved in original position
+      vtui.fill_box(' ', 1, 1, $c6)         ; blank out line being moved in original position
     }
 
     sub place_cursor(ubyte col, ubyte line) {
       vtg(col, line)
-      vtui.rest_rect($80, 1, $0000, 1, 1)   ; restore cursor
-    }
-
-    sub init_spot(ubyte col, ubyte line) {  ; this is only used once in the beginning
-        vtg(col, line);
-        vtui.save_rect($80, 1, $0000, 1, 1) ; initialize what will be the cursor
+      uword fullChar = vtui.scan_char()     ; get screen code
+      ubyte char     = lsb(fullChar)
+      vtg(col, line)
+      vtui.plot_char(char, $61)
     }
 
     sub cursor_presave(ubyte col, ubyte line) {
@@ -116,7 +114,6 @@ main {
     sub init_cursor(ubyte col, ubyte line) {; full initial set up of cursor
         cursor_presave(col, line);
         draw_cursor(col, line)
-        init_spot(col, line)
     }
 
     sub restore_border() {
@@ -176,9 +173,10 @@ main {
       vtg(main.minCol, main.minLine)
       for j in main.minLine to main.maxLine {
         for i in main.minCol to main.maxCol {
-          vtg(i, j)                       ; go to location of char to get
-          ubyte char = vtui.scan_char()           ; get screen code
-          vtg(i, j)                       ; go to next line
+          vtg(i, j)                               ; go to location of char to get
+          uword fullChar = vtui.scan_char()       ; get screen code and color
+          ubyte char = lsb(fullChar)              ; extract char from word
+          vtg(i, j)                               ; go to next line
           ubyte petchar = vtui.scr2pet(char)      ; convert screen code to petscii, for writing to file
           diskio.f_write(&petchar, 1)             ; write to file (using reference to "petchar")
         }
@@ -208,7 +206,7 @@ main {
         ubyte cond = 1
         while cond {
            vtg(main.COL,main.LINE)
-           str inputbuffer = " " * 78 ; this is the width of the inner box vtui box
+           str inputbuffer = " " * BASE_LINE_SIZE ; this is the width of the inner box vtui box
            updateXY_ticker()
 
            ; if the last key is ESC, input_str will exit - we check to see
@@ -230,7 +228,7 @@ main {
              navMode()
            }
 
-           main.COL  = 3
+           main.COL  = main.minCol 
            main.LINE = main.LINE + 1
 replace_mode:
            update_activity("--replace--")
@@ -484,12 +482,14 @@ navcharloop:
             vtg(3,main.maxLine+1);
             ubyte retval = vtui.input_str(cmdbuffer, 50, $01)
             if (cmdbuffer[0] == 'q') {
-              vtg(1,1)
-              txt.clear_screen()
-              txt.print("thank you for using xvi, the vi clone for the x16!\n\n")
-              txt.print("for updates, please visit\n\n")
-              txt.print("https://github.com/oodler577/xvi\n")
-              sys.exit(0)
+              if (cmdbuffer[1] == '!') {
+                vtg(1,1)
+                txt.clear_screen()
+                txt.print("thank you for using xvi, the vi clone for the x16!\n\n")
+                txt.print("for updates, please visit\n\n")
+                txt.print("https://github.com/oodler577/xvi\n")
+                sys.exit(0)
+              }
             }
             else if (cmdbuffer[0] == 'e') {
               str fn1 = " " * main.CMDBUFFER_SIZE 
@@ -512,6 +512,14 @@ navcharloop:
               save_file(fn2)
               ; show post-command messages
               ;; ** look in "save_file" subroutine above
+              if (cmdbuffer[1] == 'q') {
+                vtg(1,1)
+                txt.clear_screen()
+                txt.print("thank you for using xvi, the vi clone for the x16!\n\n")
+                txt.print("for updates, please visit\n\n")
+                txt.print("https://github.com/oodler577/xvi\n")
+                sys.exit(0)
+              }
             }
             else {
               vtg(main.minCol-1,main.maxLine+1);
@@ -618,7 +626,7 @@ vtui $8800 {
     romsub $880e = clr_scr(ubyte char @A, ubyte colors @X) clobbers(Y)
     romsub $8811 = gotoxy(ubyte column @A, ubyte row @Y)
     romsub $8814 = plot_char(ubyte char @A, ubyte colors @X)
-    romsub $8817 = scan_char() -> ubyte @A
+    romsub $8817 = scan_char() -> uword @AX
     romsub $881a = hline(ubyte char @A, ubyte length @Y, ubyte colors @X) clobbers(A)
     romsub $881d = vline(ubyte char @A, ubyte height @Y, ubyte colors @X) clobbers(A)
     romsub $8820 = print_str(str txtstring @R0, ubyte length @Y, ubyte colors @X, ubyte convertchars @A) clobbers(A, Y)

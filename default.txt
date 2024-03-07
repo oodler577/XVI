@@ -1,6 +1,6 @@
-          RC-1.0 XVI - THE VI CLONE FOR THE COMMANDER X16                   
+          RC-1.1 XVI - THE VI CLONE FOR THE COMMANDER X16                   
                                                                             
-*** NOTE: CAN SAVE FILE !! ***                                              
+                   *** NOTE: CAN SAVE A FILE !! ***                         
                                                                             
 WRITING MODE:                                                               
     SHIFT+R   - STANDARD REPLACE MODE                                       
@@ -32,10 +32,6 @@ COMMAND MODE:
            Q                  - QUIT TO BASIC PROMPT                        
            W PATH/TO/FILE.EXT - SAVE A FILE FOR EDITING                     
                                                                             
-TODO BEFORE 1.0 RELEASE:                                                    
-                                                                            
- * (STRETCH) CURSOR SHOWS CHARACTER UNDER IT                                
-                                                                            
 TODO AFTER 1.0 RELEASE:                                                     
                                                                             
  * SUPPORT FILES > 54 LINES LONG (OUTSIDE OF VIEW PORT)                     
@@ -51,6 +47,10 @@ PROJECT CODE REPO:
   HTTPS://GITHUB.COM/OODLER577/XVI                                          
                                                                             
                 XVI - THE VI CLONE FOR THE COMMANDER X16                    
+                                                                            
+                                                                            
+                                                                            
+                                                                            
                                                                             
                                                                             
                                                                             
