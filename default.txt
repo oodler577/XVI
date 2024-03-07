@@ -31,6 +31,7 @@ COMMAND MODE:
            E PATH/TO/FILE.EXT - OPEN A FILE FOR EDITING                     
            Q                  - QUIT TO BASIC PROMPT                        
            W PATH/TO/FILE.EXT - SAVE A FILE FOR EDITING                     
+          WQ PATH/TO/FILE.EXT - SAVE FILE AND QUIT                          
                                                                             
 TODO AFTER 1.0 RELEASE:                                                     
                                                                             
@@ -42,15 +43,14 @@ TODO AFTER 1.0 RELEASE:
  * MAKE CHARACTER DELETED WITH "X" AVAILABLE FOR PASTING                    
  * SUPPORT COMMANDS TO SHOW/HIDE LINE NUMBERS                               
  * LEVELS OF UNDO                                                           
+ * :Q SHOULD ASK "ARE YOU SURE"                                             
+ * :Q!SHOULD BE UNCONDITIONAL QUIT                                          
+ * INTRODUCE SWAP FILES, E.G., FILENAME.EXT.SWP                             
                                                                             
 PROJECT CODE REPO:                                                          
   HTTPS://GITHUB.COM/OODLER577/XVI                                          
                                                                             
                 XVI - THE VI CLONE FOR THE COMMANDER X16                    
-                                                                            
-                                                                            
-                                                                            
-                                                                            
                                                                             
                                                                             
                                                                             
