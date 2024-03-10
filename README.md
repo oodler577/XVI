@@ -7,14 +7,15 @@ Contributors welcome. Find me on the official [cx16 Discord](https://www.command
 
 # Latest
 
-* Current latest binary, [https://github.com/oodler577/XVI/raw/master/xvi
-](https://github.com/oodler577/XVI/raw/master/XVI)
+* Current latest binary, [HERE](https://github.com/oodler577/XVI/raw/master/XVI)
 
 * Run with x16emu,
 
 ```
 x16emu -quality best -scale 2 -run -prg ./xvi
 ```
-## Video Demo (BASLOAD is in the repo)
+## Video Demo
+
+(Note: using this [BASLOAD](https://github.com/oodler577/XVI/raw/master/BASLOAD), provided for by this repo)
 
 https://github.com/oodler577/XVI/assets/69679854/1f549742-a8c2-44e6-9c68-c01e9f4b6a0d
