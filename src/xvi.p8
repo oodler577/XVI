@@ -482,14 +482,14 @@ navcharloop:
             vtg(3,main.maxLine+1);
             ubyte retval = vtui.input_str(cmdbuffer, 50, $01)
             if (cmdbuffer[0] == 'q') {
-              if (cmdbuffer[1] == '!') {
+              ;if (cmdbuffer[1] == '!') {
                 vtg(1,1)
                 txt.clear_screen()
                 txt.print("thank you for using xvi, the vi clone for the x16!\n\n")
                 txt.print("for updates, please visit\n\n")
                 txt.print("https://github.com/oodler577/xvi\n")
                 sys.exit(0)
-              }
+              ;}
             }
             else if (cmdbuffer[0] == 'e') {
               str fn1 = " " * main.CMDBUFFER_SIZE 
