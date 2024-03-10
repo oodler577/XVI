@@ -5,12 +5,16 @@ Start to a vi clone for the Commander X16 using prog8 and VTUI:
 
 Contributors welcome. Find me on the official [cx16 Discord](https://www.commanderx16.com/) in the `#prog8` channel.
 
-Work in progress. YMMV.
+# Latest
 
-Current latest binary, https://github.com/oodler577/XVI/raw/master/xvi
+* Current latest binary, [https://github.com/oodler577/XVI/raw/master/xvi
+](https://github.com/oodler577/XVI/raw/master/XVI)
 
-Run with x16emu,
+* Run with x16emu,
 
 ```
 x16emu -quality best -scale 2 -run -prg ./xvi
 ```
+## Video Demo (BASLOAD is in the repo)
+
+https://github.com/oodler577/XVI/assets/69679854/1f549742-a8c2-44e6-9c68-c01e9f4b6a0d
