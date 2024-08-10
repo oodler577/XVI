@@ -1,5 +1,5 @@
 all:
-	java -jar /Users/tempuser/Desktop/x16/prog8compiler-10.2-all.jar -target cx16 src/xvi.p8
+	java -jar /Users/tempuser/Desktop/x16/prog8compiler-10.3.1-all.jar -target cx16 src/xvi.p8
 	cp -f xvi.prg XVI 
 
 run:
@@ -8,8 +8,14 @@ run:
 trace:
 	x16emu -scale 2 -prg ./XVI -run -trace
 
-test:
-	java -jar /Users/tempuser/Desktop/x16/prog8compiler-10.2-all.jar -target cx16 src/file-io-test.p8
+io-test:
+	java -jar /Users/tempuser/Desktop/x16/prog8compiler-10.3.1-all.jar -target cx16 src/file-io-test.p8
+
+iso-test:
+	java -jar /Users/tempuser/Desktop/x16/prog8compiler-10.3.1-all.jar -target cx16 src/iso-test.p8
+
+txt-viewer:
+	java -jar /Users/tempuser/Desktop/x16/prog8compiler-10.3.1-all.jar -target cx16 src/txt-viewer.p8
 
 debug:
 	x16emu -scale 2 -prg ./XVI -run -debug

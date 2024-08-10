@@ -57,22 +57,22 @@ main {
 
     sub cursor_presave(ubyte col, ubyte line) {
       vtg(col, line)
-      vtui.save_rect($80, 1, $0002, 1, 1)   ; save what is under cursor for save_rect
+      vtui.save_rect($80, true, $0002, 1, 1)   ; save what is under cursor for save_rect
     }
 
     sub cursor_restore(ubyte col, ubyte line) {
       vtg(col, line)
-      vtui.rest_rect($80, 1, $0002, 1, 1)   ; restore what is under cursor for save_rect
+      vtui.rest_rect($80, true, $0002, 1, 1)   ; restore what is under cursor for save_rect
     }
 
     sub copy_1x1(ubyte line) {
       vtg(main.minCol,line)
-      vtui.save_rect($80, 1, $0004, 1, 1)   ; save line so it's available to (P)aste
+      vtui.save_rect($80, true, $0004, 1, 1)   ; save line so it's available to (P)aste
     }
 
     sub copy_line_to_clipboard(ubyte line) {
       vtg(main.minCol,line)
-      vtui.save_rect($80, 1, CLIPBOARD_VERA_ADDR, BASE_LINE_SIZE, 1)  ; save line so it's available to (P)aste
+      vtui.save_rect($80, true, CLIPBOARD_VERA_ADDR, BASE_LINE_SIZE, 1)  ; save line so it's available to (P)aste
     }
 
     sub cut_line_and_copy_to_clipboard(ubyte line)  {
@@ -83,7 +83,7 @@ main {
 
     sub paste_line_from_clipboard(ubyte line) {
       vtg(main.minCol,line)
-      vtui.rest_rect($80, 1, CLIPBOARD_VERA_ADDR, BASE_LINE_SIZE, 1)  ; restore rectangle
+      vtui.rest_rect($80, true, CLIPBOARD_VERA_ADDR, BASE_LINE_SIZE, 1)  ; restore rectangle
     }
 
     sub updateXY_ticker() {
@@ -203,7 +203,7 @@ main {
         move_cursor(main.minCol,main.minLine)
 
         navMode() ; start off in nav mode, which is expected
-        ubyte cond = 1
+        bool cond = true
         while cond {
            vtg(main.COL,main.LINE)
            str inputbuffer = " " * BASE_LINE_SIZE ; this is the width of the inner box vtui box
@@ -246,7 +246,8 @@ navstart:
       ubyte[2] numb  = 0    ; digit for "NN SHIFT+g"
 
 navcharloop:
-      ubyte char = cbm.GETIN()
+      ubyte char
+      void, char = cbm.GETIN()
 
       ; catch leading numbers for "NN SHIFT+g"
       when char {
@@ -362,16 +363,16 @@ navcharloop:
               copy_line_to_clipboard(main.LINE)      ; save line to paste buffer
               ; cut line, store in clipboard, shift lines up 1
               vtg(main.minCol, main.LINE+1)
-              vtui.save_rect($80, 1, TMP_LINE_BUFF_VERA_ADDR, BASE_LINE_SIZE, 1)    ; save line to move up
+              vtui.save_rect($80, true, TMP_LINE_BUFF_VERA_ADDR, BASE_LINE_SIZE, 1)    ; save line to move up
               blank_line(main.LINE+1)
               vtg(main.minCol, main.LINE)
-              vtui.rest_rect($80, 1, TMP_LINE_BUFF_VERA_ADDR, BASE_LINE_SIZE, 1)    ; restore line being moved up
+              vtui.rest_rect($80, true, TMP_LINE_BUFF_VERA_ADDR, BASE_LINE_SIZE, 1)    ; restore line being moved up
               cursor_presave(main.COL, main.LINE)     ; save what's in the space the cursor is about to occupy 
               for j in main.LINE+1 to main.maxLine-1 {
                 vtg(main.minCol, j+1)
-                vtui.save_rect($80, 1, TMP_LINE_BUFF_VERA_ADDR, BASE_LINE_SIZE, 1)  ; save line to move up
+                vtui.save_rect($80, true, TMP_LINE_BUFF_VERA_ADDR, BASE_LINE_SIZE, 1)  ; save line to move up
                 vtg(main.minCol, j)
-                vtui.rest_rect($80, 1, TMP_LINE_BUFF_VERA_ADDR, BASE_LINE_SIZE, 1)  ; restore line being moved up
+                vtui.rest_rect($80, true, TMP_LINE_BUFF_VERA_ADDR, BASE_LINE_SIZE, 1)  ; restore line being moved up
               }
               blank_line(main.maxLine)                ; enforces max line to main.maxLine, adds blank that moves up ...
               move_cursor(main.minCol, main.LINE)
@@ -406,9 +407,9 @@ navcharloop:
               cursor_restore(main.COL, main.LINE)       ; restore what is under cursor before moving lines
               for i in main.maxLine downto main.LINE+2 {
                 vtg(main.minCol, i-1)                   ; jump to line above
-                vtui.save_rect($80, 1, TMP_LINE_BUFF_VERA_ADDR, BASE_LINE_SIZE, 1)    ; copy line above 
+                vtui.save_rect($80, true, TMP_LINE_BUFF_VERA_ADDR, BASE_LINE_SIZE, 1)    ; copy line above 
                 vtg(main.minCol, i)                     ; jump to line below
-                vtui.rest_rect($80, 1, TMP_LINE_BUFF_VERA_ADDR, BASE_LINE_SIZE, 1)    ; restore 2nd to line below
+                vtui.rest_rect($80, true, TMP_LINE_BUFF_VERA_ADDR, BASE_LINE_SIZE, 1)    ; restore 2nd to line below
               }
               blank_line(main.LINE+1) 
               paste_line_from_clipboard(main.LINE+1)    ; paste from clipboard to line below initial line
@@ -424,9 +425,9 @@ navcharloop:
               cursor_restore(main.COL, main.LINE)        ; restore what is under cursor before moving lines
               for i in main.maxLine downto main.LINE+1 {
                 vtg(main.minCol, i-1)                    ; jump to line above
-                vtui.save_rect($80, 1, TMP_LINE_BUFF_VERA_ADDR, BASE_LINE_SIZE, 1)     ; copy line above 
+                vtui.save_rect($80, true, TMP_LINE_BUFF_VERA_ADDR, BASE_LINE_SIZE, 1)     ; copy line above 
                 vtg(main.minCol, i)                      ; jump to line below
-                vtui.rest_rect($80, 1, TMP_LINE_BUFF_VERA_ADDR, BASE_LINE_SIZE, 1)     ; restore 2nd to line below
+                vtui.rest_rect($80, true, TMP_LINE_BUFF_VERA_ADDR, BASE_LINE_SIZE, 1)     ; restore 2nd to line below
               }
               blank_line(main.LINE)
               paste_line_from_clipboard(main.LINE)       ; paste from clipboard to line below initial line
@@ -443,9 +444,9 @@ navcharloop:
               cursor_restore(main.COL, main.LINE)       ; restore what is under cursor before moving lines
               for i in main.maxLine downto main.LINE+2 {
                 vtg(main.minCol, i-1)                   ; jump to line above
-                vtui.save_rect($80, 1, TMP_LINE_BUFF_VERA_ADDR, BASE_LINE_SIZE, 1)    ; copy line above 
+                vtui.save_rect($80, true, TMP_LINE_BUFF_VERA_ADDR, BASE_LINE_SIZE, 1)    ; copy line above 
                 vtg(main.minCol, i)                     ; jump to line below
-                vtui.rest_rect($80, 1, TMP_LINE_BUFF_VERA_ADDR, BASE_LINE_SIZE, 1)    ; restore 2nd to line below
+                vtui.rest_rect($80, true, TMP_LINE_BUFF_VERA_ADDR, BASE_LINE_SIZE, 1)    ; restore 2nd to line below
               }
               blank_line(main.LINE+1) 
               init_move_cursor(main.minCol, main.LINE+1)  ; get cursor visible
@@ -461,9 +462,9 @@ navcharloop:
               cursor_restore(main.COL, main.LINE)        ; restore what is under cursor before moving lines
               for i in main.maxLine downto main.LINE+1 {
                 vtg(main.minCol, i-1)                    ; jump to line above
-                vtui.save_rect($80, 1, TMP_LINE_BUFF_VERA_ADDR, BASE_LINE_SIZE, 1)     ; copy line above 
+                vtui.save_rect($80, true, TMP_LINE_BUFF_VERA_ADDR, BASE_LINE_SIZE, 1)     ; copy line above 
                 vtg(main.minCol, i)                      ; jump to line below
-                vtui.rest_rect($80, 1, TMP_LINE_BUFF_VERA_ADDR, BASE_LINE_SIZE, 1)     ; restore 2nd to line below
+                vtui.rest_rect($80, true, TMP_LINE_BUFF_VERA_ADDR, BASE_LINE_SIZE, 1)     ; restore 2nd to line below
               }
               blank_line(main.LINE)
               vtg(main.minCol, main.LINE)
@@ -551,16 +552,16 @@ navcharloop:
    sub right_shift_spc()  {
      for i in main.maxCol-1 downto main.COL {
        vtg(i,main.LINE)
-       vtui.save_rect($80, 1, TMP_LINE_BUFF_VERA_ADDR, 1, 1); save line so it's available to (P)aste
+       vtui.save_rect($80, true, TMP_LINE_BUFF_VERA_ADDR, 1, 1); save line so it's available to (P)aste
        blank_1x1(main.COL,main.LINE)
        vtg(i+1,main.LINE)
-       vtui.rest_rect($80, 1, TMP_LINE_BUFF_VERA_ADDR, 1, 1); restore line so it's available to (P)aste
+       vtui.rest_rect($80, true, TMP_LINE_BUFF_VERA_ADDR, 1, 1); restore line so it's available to (P)aste
      }
 
      vtg(main.COL,main.LINE)
-     vtui.rest_rect($80, 1, $0002, 1, 1)  ; save line so it's available to (P)aste
+     vtui.rest_rect($80, true, $0002, 1, 1)  ; save line so it's available to (P)aste
      vtg(main.COL,main.LINE)
-     vtui.save_rect($80, 1, TMP_LINE_BUFF_VERA_ADDR, 1, 1)  ; save line so it's available to (P)aste
+     vtui.save_rect($80, true, TMP_LINE_BUFF_VERA_ADDR, 1, 1)  ; save line so it's available to (P)aste
 
      blank_1x1(main.COL,main.LINE)
      cursor_presave(main.COL,main.LINE)
@@ -569,7 +570,7 @@ navcharloop:
      ; mind RHS text area bounds
      if (main.COL < main.maxCol) {
        vtg(main.COL+1,main.LINE)
-       vtui.rest_rect($80, 1, TMP_LINE_BUFF_VERA_ADDR, 1, 1)  ; restore line so it's available to (P)aste
+       vtui.rest_rect($80, true, TMP_LINE_BUFF_VERA_ADDR, 1, 1)  ; restore line so it's available to (P)aste
        cursor_restore(main.COL, main.LINE)   ; restore what is under cursor for save_rect
        move_cursor(main.COL+1, main.LINE)
      }
@@ -579,9 +580,9 @@ navcharloop:
      blank_1x1(main.maxCol, main.LINE)
      for i in main.COL to main.maxCol-1 {  ; 
        vtg(i+1,main.LINE)
-       vtui.save_rect($80, 1, TMP_LINE_BUFF_VERA_ADDR, 1, 1); save line so it's available to (P)aste
+       vtui.save_rect($80, true, TMP_LINE_BUFF_VERA_ADDR, 1, 1); save line so it's available to (P)aste
        vtg(i,main.LINE)
-       vtui.rest_rect($80, 1, TMP_LINE_BUFF_VERA_ADDR, 1, 1); save line so it's available to (P)aste
+       vtui.rest_rect($80, true, TMP_LINE_BUFF_VERA_ADDR, 1, 1); save line so it's available to (P)aste
      }
      blank_1x1(main.maxCol,main.LINE)
      cursor_presave(main.COL,main.LINE)
