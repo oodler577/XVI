@@ -34,10 +34,10 @@ main {
 
         ; +----------+----------------------------------------------+----------+
         ; | PREV_PTR |                 DATA - LINE TEXT             | NEXT_PTR |
-        ; | 2 Bytes  |                 128 Bytes                    | 2 Bytes  |
+        ; | 1 Word   |                 128 Bytes                    | 1 Word   |
         ; +----------+----------------------------------------------+----------+
 
-        const ubyte PTRSZ   = 2
+        const ubyte PTRSZ   = 2 ; in Bytes
         const ubyte RECSZ   = PTRSZ + 128 + PTRSZ 
 
         cbm.CLEARST() ; set so READST() is initially known to be clear
@@ -51,11 +51,10 @@ main {
             ; read line
             ubyte length = diskio.f_readline(lineBuffer)
 
-            ubyte i
+            ubyte i = 0
 
             for i in 0 to 127 {
-               uword THIS_REC = BANK_PTR + RECSZ * lines
-
+               uword THIS_REC = &BANK_PTR + RECSZ * lines
                @(THIS_REC + PTRSZ + i) = lineBuffer[i]
                toPrint[i] = @(THIS_REC + PTRSZ + i)
             }
@@ -85,18 +84,18 @@ main {
   ;  peekw (address)
   ;    reads the word value at the given address in memory. Word is read as usual little-endian lsb/msb byte order.
 
-  blocks {
-    const ubyte off_prev = 0
-    const ubyte off_next = 2
-    const ubyte off_size = 4
-    const ubyte off_data = 5
-    sub prev(uword blk) -> uword { return peekw(blk + off_prev) }
-    sub set_prev(uword blk, uword value) { pokew(blk + off_prev, value) }
-  ;  ...
-    sub size(uword blk) -> ubyte { return @(blk + off_size) }
-    sub set_size(uword blk, ubyte value) { @(blk + off_size) = value }
-  ;  ...
-}
+;;   blocks {
+;;     const ubyte off_prev = 0
+;;     const ubyte off_next = 2
+;;     const ubyte off_size = 4
+;;     const ubyte off_data = 5
+;;     sub prev(uword blk) -> uword { return peekw(blk + off_prev) }
+;;     sub set_prev(uword blk, uword value) { pokew(blk + off_prev, value) }
+;;   ;  ...
+;;     sub size(uword blk) -> ubyte { return @(blk + off_size) }
+;;     sub set_size(uword blk, ubyte value) { @(blk + off_size) = value }
+;;   ;  ...
+;; }
 
 ; TODO
 ;  1. initially show just the visible lines to screen
