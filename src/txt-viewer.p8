@@ -10,7 +10,14 @@
 main {
     str userinput        = "x"*80
     str currFilename     = " "*80
-    ubyte initial_bank   = 1 
+    str lineBuffer       = " " * 128
+    str printBuffer      = " " * 128
+    ubyte line          = 0
+    const ubyte DATSZ    = 128
+    const ubyte PTRSZ    = 2 ; in Bytes
+    const ubyte RECSZ    = PTRSZ + DATSZ + PTRSZ 
+    const ubyte BANK1    = 1
+
 
     sub start() {
       ubyte char = 0 
@@ -22,6 +29,7 @@ main {
       void, char = cbm.GETIN()
       when char {
         $71 -> {       ; 'q'
+          txt.iso_off()
           sys.exit(0)
         }
       }
@@ -29,54 +37,69 @@ main {
     }
 
     sub open_file(str filepath, ubyte BANK) {
-        ubyte lines      = 0
-        &uword BANK_PTR  = $A000
+        uword BASE_PTR  = $A000
 
         ; +----------+----------------------------------------------+----------+
         ; | PREV_PTR |                 DATA - LINE TEXT             | NEXT_PTR |
         ; | 1 Word   |                 128 Bytes                    | 1 Word   |
         ; +----------+----------------------------------------------+----------+
 
-        const ubyte PTRSZ   = 2 ; in Bytes
-        const ubyte RECSZ   = PTRSZ + 128 + PTRSZ 
-
         cbm.CLEARST() ; set so READST() is initially known to be clear
         if diskio.f_open(filepath) {
+
           main.currFilename = filepath
+
+          ubyte i = 0
           while cbm.READST() == 0 {
 
-            str lineBuffer = " " * 128
-            str toPrint    = " " * 128
+            ;; reset these buffers
+            lineBuffer  = " " * 128
+            printBuffer = " " * 128
 
             ; read line
             ubyte length = diskio.f_readline(lineBuffer)
 
-            ubyte i = 0
+            ; write line to memory as a fixed width record
+            blocks.save_rec(BASE_PTR, BANK1, line)
 
-            for i in 0 to 127 {
-               uword THIS_REC = &BANK_PTR + RECSZ * lines
-               @(THIS_REC + PTRSZ + i) = lineBuffer[i]
-               toPrint[i] = @(THIS_REC + PTRSZ + i)
-            }
+         ;; PRINT TO SCREEN PROOF OF CONCEPT
+            blocks.print_test()
 
-            txt.print(toPrint)
-            txt.nl()
-
-            lines += 1
-            if (lines == 54) {
+            line += 1
+            if (line == 54) {
               break
             }
           }
 
-          conv.str_ub(lines)
-          txt.print(conv.string_out)
-          txt.print(" lines")
-          txt.nl()
           diskio.f_close()
+
+          conv.str_ub(line)
+          txt.print(conv.string_out)
+          txt.print(" line")
+          txt.nl()
         }
+     }
+  }
+
+  blocks {
+    sub save_rec (uword BASE_PTR, ubyte bank, ubyte line) {
+      ubyte i;
+
+;;; TODO - update pointer records for PREV/NEXT
+
+      for i in 0 to main.DATSZ-1 {
+         uword THIS_REC = BASE_PTR + main.RECSZ * line
+         @(THIS_REC + main.PTRSZ + i) = main.lineBuffer[i] ;; write to the memory bank
+         main.printBuffer[i] = @(THIS_REC + main.PTRSZ + i)    ;; copy from the memory bank to regular str variable
+      }
     }
 
+    sub print_test () {
+      txt.print(main.printBuffer)
+      txt.nl()
+    }
   }
+
 
   ; MarkTheStrange's fixed length records example ...
   ;  pokew (address, value)
@@ -98,11 +121,11 @@ main {
 ;; }
 
 ; TODO
-;  1. initially show just the visible lines to screen
-;  2. but save all lines to BANK via fixed records (see start below in the "block" package ...)
+;  1. initially show just the visible line to screen
+;  2. but save all line to BANK via fixed records (see start below in the "block" package ...)
 ;  3. implement up/down (k/j) and left/right (h/l) so we can get as far as navigating files
-;     such that the lines shift up or down - or if the line is too long (what's that MAX here?)
-;     the lines will shift left or right
+;     such that the line shift up or down - or if the line is too long (what's that MAX here?)
+;     the line will shift left or right
 ;  4. OPEN file (:tabedit)
 ;     * right time to consider tabs? - each file is comfortably saved in each bank
 ;     * gt (tab right), gT (tab left)
