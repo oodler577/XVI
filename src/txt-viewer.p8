@@ -9,16 +9,23 @@
 
 main {
     str userinput        = "x"*80
-    str currFilename     = " "*80
-    str lineBuffer       = " " * 128
-    str printBuffer      = " " * 128
-    ubyte line           = 0
-    const ubyte DATSZ    = 128
-    const ubyte PTRSZ    = 2 ; in Bytes
-    const ubyte RECSZ    = PTRSZ + DATSZ + PTRSZ 
-    const ubyte BANK1    = 1
-    const ubyte HEIGHT   = 54 ; max number of lines to show at a given time
-    const ubyte WIDTH    = 79 ; max number of columns to show at any given time
+    str currFilename        = " "*80
+    str lineBuffer          = " " * 128
+    str printBuffer         = " " * 128
+    ubyte line              = 0
+    const ubyte DATSZ       = 128
+    const ubyte PTRSZ       = 2 ; in Bytes
+    const ubyte RECSZ       = PTRSZ + DATSZ + PTRSZ 
+    const ubyte BANK1       = 1
+    const ubyte HEIGHT      = 54 ; max number of lines to show at a given time
+    const ubyte WIDTH       = 79 ; max number of columns to show at any given time
+
+    const uword VERA_ADDR_L = $9F20
+    const uword VERA_ADDR_M = $9F21
+    const uword VERA_ADDR_H = $9F22
+    const uword VERA_DATA0  = $9F23
+    const uword VERA_DATA1  = $9F24
+    const uword VERA_CTRL   = $9F25
 
     sub start() {
       ubyte char = 0 
@@ -29,11 +36,17 @@ main {
     navcharloop:
       void, char = cbm.GETIN()
       when char {
+        $68 -> {       ; 'h', LEFT 
+          cursor_left_on_h()
+        }
         $6a -> {       ; 'j', DOWN
           cursor_down_on_j()
         }
         $6b -> {       ; 'k', UP
           cursor_up_on_k()
+        }
+        $6c -> {       ; 'l', RIGHT 
+          cursor_right_on_l()
         }
         $71 -> {       ; 'q'
           txt.iso_off()
@@ -55,6 +68,18 @@ main {
       cursor.place_cursor(c,r-1)   ;; move actual cursor
     }
 
+    sub cursor_left_on_h () {
+      ubyte c = txt.get_column()
+      ubyte r = txt.get_row()
+      cursor.place_cursor(c-1,r)   ;; move actual cursor
+    }
+
+    sub cursor_right_on_l () {
+      ubyte c = txt.get_column()
+      ubyte r = txt.get_row()
+      cursor.place_cursor(c+1,r)   ;; move actual cursor
+    }
+
     sub load_file(str filepath, ubyte BANK) {
         uword BASE_PTR  = $A000
         cbm.CLEARST() ; set so READST() is initially known to be clear
@@ -70,7 +95,7 @@ main {
             ; write line to memory as a fixed width record
             blocks.write_record(BASE_PTR, BANK1, line)
             line += 1
-            if (line <= 58) {
+            if (line <= 55) {
               ;; PRINT TO SCREEN PROOF OF CONCEPT
               ;; but only first 54 lines
               blocks.print_test()
@@ -91,6 +116,7 @@ main {
 ;;;   then move it i/j/h/k
 ;;;   then scripe file by redrawing a "window of lines"
 ;;;   handle off screen columns or wrap??
+          cursor.init()
           cursor.place_cursor(0,0)
         }
      }
@@ -99,13 +125,24 @@ main {
   ; maybe external module contribution to deal with cursor movements
   cursor {
       ubyte saved_char
+
+      sub init() {
+        ubyte c = txt.get_column()
+        ubyte r = txt.get_row()
+        save_char(c,r)
+      }
+  
       sub save_char(ubyte c, ubyte r) {
         saved_char = txt.getchr(c,r)
       }
-  
+
+      sub save_current_char() {
+        init()
+      }
+
       sub restore_char(ubyte c, ubyte r) {
         txt.plot(c,r)
-        txt.chrout(saved_char << 8)
+        txt.chrout(saved_char)
         txt.plot(c,r)
       }
   
@@ -115,12 +152,12 @@ main {
         restore_char(c,r)
       }
   
-      sub place_cursor(ubyte c, ubyte r) {
-        restore_current_char() ;;
-        save_char(c,r)         ;; save char in the next cursor destination
-        txt.plot(c,r)          ;; move cursor to ne location
+      sub place_cursor(ubyte new_c, ubyte new_r) {
+        restore_current_char() ;; restore char in current cursor location
+        txt.plot(new_c,new_r)  ;; move cursor to new location
+        save_current_char()    ;; save char in the current location (here, the new c,r)
         txt.chrout($5d)        ;; write cursor charactor, "]"
-        txt.plot(c,r)          ;; move cursor back after txt.chrout
+        txt.plot(new_c,new_r)  ;; move cursor back after txt.chrout advances cursor
       }
   
   }
@@ -138,8 +175,9 @@ main {
 
       for i in 0 to main.DATSZ-1 {
          uword THIS_REC = BASE_PTR + main.RECSZ * line
-         @(THIS_REC + main.PTRSZ + i) = main.lineBuffer[i] ;; write to the memory bank
-         main.printBuffer[i] = @(THIS_REC + main.PTRSZ + i)    ;; copy from the memory bank to regular str variable
+         @(THIS_REC + main.PTRSZ + i) = main.lineBuffer[i]  ;; write to the memory bank
+         main.printBuffer[i] = @(THIS_REC + main.PTRSZ + i) ;; copy from the memory
+                                                            ;; bank to regular str variable
       }
     }
 
