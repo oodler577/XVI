@@ -3,6 +3,7 @@
 %import conv
 %import syslib
 %import diskio
+%import cursor
 %option no_sysinit
 %zeropage basicsafe
 %encoding iso
@@ -112,54 +113,10 @@ main {
           conv.str_ub(txt.get_row())
           txt.print(conv.string_out)
           txt.nl()
-;;; TODO DRAW CURSOR ...
-;;;   then move it i/j/h/k
-;;;   then scripe file by redrawing a "window of lines"
-;;;   handle off screen columns or wrap??
           cursor.init()
           cursor.place_cursor(0,0)
         }
      }
-  }
-
-  ; maybe external module contribution to deal with cursor movements
-  cursor {
-      ubyte saved_char
-
-      sub init() {
-        ubyte c = txt.get_column()
-        ubyte r = txt.get_row()
-        save_char(c,r)
-      }
-  
-      sub save_char(ubyte c, ubyte r) {
-        saved_char = txt.getchr(c,r)
-      }
-
-      sub save_current_char() {
-        init()
-      }
-
-      sub restore_char(ubyte c, ubyte r) {
-        txt.plot(c,r)
-        txt.chrout(saved_char)
-        txt.plot(c,r)
-      }
-  
-      sub restore_current_char() {
-        ubyte c = txt.get_column()
-        ubyte r = txt.get_row()
-        restore_char(c,r)
-      }
-  
-      sub place_cursor(ubyte new_c, ubyte new_r) {
-        restore_current_char() ;; restore char in current cursor location
-        txt.plot(new_c,new_r)  ;; move cursor to new location
-        save_current_char()    ;; save char in the current location (here, the new c,r)
-        txt.chrout($5d)        ;; write cursor charactor, "]"
-        txt.plot(new_c,new_r)  ;; move cursor back after txt.chrout advances cursor
-      }
-  
   }
 
   blocks {
