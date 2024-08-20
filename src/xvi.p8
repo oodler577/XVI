@@ -263,7 +263,24 @@ navcharloop:
               goto navcharloop
             }
           }
-          $30,$31,$32,$33,$34,$35,$36,$37,$38,$39 -> { ; digits 0-9
+          $30 -> { ; bare '0' jumps to start of line
+            when nngN {
+              0 -> {
+                ;; jump to start of the current line
+                move_cursor(main.minCol,main.LINE)
+              }
+              1 -> {
+                numb[nngN] = char - $30
+                nngN++
+              }
+              else -> {
+                nngN = 0
+              }
+
+            }
+            goto navcharloop
+          }
+          $31,$32,$33,$34,$35,$36,$37,$38,$39 -> { ; digits 1-9
             if nngN < 2 {
               numb[nngN] = char - $30
               nngN++
