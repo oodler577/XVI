@@ -18,8 +18,6 @@ main {
     const ubyte PTRSZ       = 2 ; in Bytes
     const ubyte RECSZ       = PTRSZ + DATSZ + PTRSZ 
     const ubyte BANK1       = 1
-    const ubyte HEIGHT      = 54 ; max number of lines to show at a given time
-    const ubyte WIDTH       = 79 ; max number of columns to show at any given time
 
     const uword VERA_ADDR_L = $9F20
     const uword VERA_ADDR_M = $9F21
