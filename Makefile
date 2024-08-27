@@ -11,7 +11,9 @@ bundle:
 	cp BASLOAD XVI/BASLOAD
 	
 	cp readme.txt XVI/readme.txt
-	zip launcher-XVI.zip XVI/ 
+	zip XVI-1.2.0.zip XVI/ 
+	mkdir ./releases 2> /dev/null || echo -n
+	cp *.zip releases/
 
 run:
 	cd XVI && x16emu -scale 2

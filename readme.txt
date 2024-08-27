@@ -1,6 +1,6 @@
 README.TXT
 
-                XVI 1.2 - THE VI CLONE FOR THE COMMANDER X16                    
+                XVI 1.2.0 - THE VI CLONE FOR THE COMMANDER X16                    
                                                                             
 WRITING MODE:                                                               
     SHIFT+R   - STANDARD REPLACE MODE                                       
