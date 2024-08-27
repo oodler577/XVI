@@ -1,0 +1,56 @@
+                XVI - THE VI CLONE FOR THE COMMANDER X16                    
+                                                                            
+                                                                            
+TODO BEFORE 1.0 RELEASE:                                                    
+                                                                            
+ * SAVE SCREEN CONTENTS TO FILE ON DISK:                                    
+      <ESC> <SHIFT>+: W PATH/TO/FILE.EXT                                    
+ * (STRETCH) CURSOR SHOWS CHARACTER UNDER IT                                
+                                                                            
+TODO AFTER 1.0 RELEASE:                                                     
+                                                                            
+ * SUPPORT FILES > 54 LINES LONG (OUTSIDE OF VIEW PORT)                     
+ * MOVE TO ISO MODE SO XVI IS SUITABLE FOR C CODE                           
+ * FIGURE OUT ACTUAL "INSERT" MODE (CAN'T DO IT WITH VTUI)                  
+ * FIGURE OUT "R" TO REPLACE SINGLE CHARACTERS (ALSO DUE TO VTUI LIMIT)     
+ * TRACK FILENAME SO ":W" JUST WORKS                                        
+ * MAKE CHARACTER DELETED WITH "X" AVAILABLE FOR PASTING                    
+ * SUPPORT COMMANDS TO SHOW/HIDE LINE NUMBERS                               
+                                                                            
+PROJECT CODE REPO:                                                          
+  HTTPS://GITHUB.COM/OODLER577/XVI                                          
+                                                                            
+                XVI - THE VI CLONE FOR THE COMMANDER X16                    
+                                                                            
+                                                                            
+                                                                            
+                                                                            
+                                                                            
+                                                                            
+                                                                            
+                                                                            
+                                                                            
+                                                                            
+                                                                            
+                                                                            
+                                                                            
+                                                                            
+                                                                            
+                                                                            
+                                                                            
+                                                                            
+                                                                            
+                                                                            
+                                                                            
+                                                                            
+                                                                            
+                                                                            
+                                                                            
+                                                                            
+                                                                            
+                                                                            
+                                                                            
+                                                                            
+                                                                            
+                                                                            
+                                                                            
