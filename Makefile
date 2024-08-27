@@ -1,9 +1,20 @@
-all:
+all: clean build bundle run
+
+build:
 	java -jar /Users/tempuser/Desktop/x16/prog8compiler-10.4-all.jar -target cx16 src/xvi.p8
-	cp -f xvi.prg XVI 
+
+bundle:
+	rm -rfv ./XVI
+	mkdir ./XVI 
+	cp xvi.prg XVI/XVI.PRG
+	cp xvi.prg XVI/AUTOBOOT.X16 
+	cp BASLOAD XVI/BASLOAD
+	
+	cp readme.txt XVI/readme.txt
+	zip launcher-XVI.zip XVI/ 
 
 run:
-	x16emu -scale 2 -prg ./XVI -run
+	cd XVI && x16emu -scale 2
 
 trace:
 	x16emu -scale 2 -prg ./XVI -run -trace
@@ -21,4 +32,5 @@ debug:
 	x16emu -scale 2 -prg ./XVI -run -debug
 
 clean:
-	rm -fv xvi XVI *.asm
+	rm -fv xvi xvi.prg *.asm 2> /dev/null || echo -n
+	rm -rf ./XVI *.zip       2> /dev/null || echo -n

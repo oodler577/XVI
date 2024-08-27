@@ -197,7 +197,7 @@ main {
         init_canvas()
         init_cursor(main.minCol,main.minLine)
 
-        str initfile = "default.txt"
+        str initfile = "readme.txt"
         open_file(initfile)
 
         move_cursor(main.minCol,main.minLine)

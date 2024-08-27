@@ -1,6 +1,6 @@
-                XVI - THE VI CLONE FOR THE COMMANDER X16                    
-                                                                            
-*** NOTE: CAN'T SAVE FILE SO NO 1.0 YET - SOON!! ***                        
+README.TXT
+
+                XVI 1.2 - THE VI CLONE FOR THE COMMANDER X16                    
                                                                             
 WRITING MODE:                                                               
     SHIFT+R   - STANDARD REPLACE MODE                                       
@@ -49,8 +49,6 @@ TODO AFTER 1.0 RELEASE:
                                                                             
 PROJECT CODE REPO:                                                          
   HTTPS://GITHUB.COM/OODLER577/XVI                                          
+
                                                                             
                 XVI - THE VI CLONE FOR THE COMMANDER X16                    
-                                                                            
-                                                                            
-                                                                            
