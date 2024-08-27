@@ -10,16 +10,16 @@
 ; see:  https://github.com/JimmyDansbo/VTUIlib
 
 main {
-    const ubyte minCol           = 2
-    const ubyte minLine          = 2
-    const ubyte maxCol           = 77
-    const ubyte maxLine          = 57
-    const ubyte BASE_LINE_SIZE   = (maxCol-minCol)+1
     ubyte i,j
-    ubyte LINE             = minLine
-    ubyte COL              = minCol
-    str currFilename       = " " * (maxCol-minCol)
-    ubyte CMDBUFFER_SIZE   = 50
+    const ubyte minCol            = 2
+    const ubyte minLine           = 2
+    const ubyte maxCol            = 77
+    const ubyte maxLine           = 57
+    const ubyte BASE_LINE_SIZE    = (maxCol-minCol)+1
+    ubyte LINE                    = minLine
+    ubyte COL                     = minCol
+    str currFilename              = " " * (maxCol-minCol)
+    ubyte CMDBUFFER_SIZE          = 50
     uword CLIPBOARD_VERA_ADDR     = $0006
     uword TMP_LINE_BUFF_VERA_ADDR = $6000
 
@@ -129,7 +129,8 @@ main {
           main.currFilename = filepath
           for j in main.minLine to main.maxLine   {
             str lineBuffer = " " *  100 
-            uword size = diskio.f_readline(lineBuffer)
+            uword size
+            size, void = diskio.f_readline(lineBuffer)
             str lineToShow = " " * (main.maxCol - main.minCol)
             string.slice(lineBuffer, 0, (main.maxCol - main.minCol)-1, lineToShow) ; make sure line conforms to current view port
             string.rstrip(lineToShow)
@@ -169,7 +170,6 @@ main {
 
       cursor_restore(main.COL, main.LINE)         ; restore what was under the cursor for saving
       diskio.f_open_w_seek(filepath)              ; open file for writing
-      ubyte j,i
       vtg(main.minCol, main.minLine)
       for j in main.minLine to main.maxLine {
         for i in main.minCol to main.maxCol {
