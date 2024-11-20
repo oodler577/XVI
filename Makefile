@@ -30,6 +30,9 @@ iso-test:
 txt-viewer:
 	java -jar /Users/tempuser/Desktop/x16/prog8compiler-10.4-all.jar -target cx16 src/txt-viewer.p8
 
+run-viewer:
+	x16emu -scale 2 -prg ./txt-viewer.prg -run -debug
+
 debug:
 	x16emu -scale 2 -prg ./XVI -run -debug
 

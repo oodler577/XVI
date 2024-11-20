@@ -4,21 +4,24 @@
 %import syslib
 %import diskio
 %import cursor
+%import vtui
 %option no_sysinit
 %zeropage basicsafe
 %encoding iso
 
 main {
-    str userinput        = "x"*80
-    str currFilename        = " "*80
+    str userinput           = "x" * 128
+    str currFilename        = " " * 128
     str lineBuffer          = " " * 128
     str printBuffer         = " " * 128
-    ubyte line              = 0
-    const ubyte DATSZ       = 128
-    const ubyte PTRSZ       = 2 ; in Bytes
-    const ubyte RECSZ       = PTRSZ + DATSZ + PTRSZ 
+    uword currentLine       = 0
+    uword line              = 0
+    const uword DATSZ       = 128
+    const uword PTRSZ       = 0 ; in Bytes
+    const uword RECSZ       = PTRSZ + DATSZ + PTRSZ 
     const ubyte BANK1       = 1
 
+    const uword BASE_PTR    = $A000
     const uword VERA_ADDR_L = $9F20
     const uword VERA_ADDR_M = $9F21
     const uword VERA_ADDR_H = $9F22
@@ -26,11 +29,32 @@ main {
     const uword VERA_DATA1  = $9F24
     const uword VERA_CTRL   = $9F25
 
+    const ubyte minCol            = 2
+    const ubyte minLine           = 2
+    const ubyte maxCol            = 77
+    const ubyte maxLine           = 57
+    const ubyte BASE_LINE_SIZE    = (maxCol-minCol)+1
+
+    sub vtg(ubyte col, ubyte row) {
+      vtui.gotoxy(col, row)
+    }
+
+    sub init_canvas() {
+      vtui.initialize()
+      vtui.screen_set(0)
+      vtui.clr_scr(' ', $50)
+      vtg(minCol-1,minLine-1)
+      vtui.fill_box(' ', maxCol, maxLine, $c6)
+      vtg(minCol-1,minLine-1)
+      vtui.border(1, maxCol+1, maxLine+1, $00)
+    }
+
     sub start() {
+      init_canvas()
       ubyte char = 0 
       txt.clear_screen();
       txt.iso()
-      load_file("src/txt-viewer.p8", BANK1) 
+      load_file("samples/sample3.txt", BANK1) 
 
     navcharloop:
       void, char = cbm.GETIN()
@@ -39,10 +63,14 @@ main {
           cursor_left_on_h()
         }
         $6a -> {       ; 'j', DOWN
-          cursor_down_on_j()
+          ;cursor_down_on_j()
+          currentLine++
+          blocks.draw_range(BANK1, currentLine, 55)
         }
         $6b -> {       ; 'k', UP
-          cursor_up_on_k()
+          ;cursor_up_on_k()
+          currentLine--
+          blocks.draw_range(BANK1, currentLine, 55)
         }
         $6c -> {       ; 'l', RIGHT 
           cursor_right_on_l()
@@ -80,29 +108,29 @@ main {
     }
 
     sub load_file(str filepath, ubyte BANK) {
-        uword BASE_PTR  = $A000
         cbm.CLEARST() ; set so READST() is initially known to be clear
         if diskio.f_open(filepath) {
           main.currFilename = filepath
-          ubyte i = 0
           while cbm.READST() == 0 {
             ;; reset these buffers
             lineBuffer  = " " * 128
             printBuffer = " " * 128
             ; read line
-            ubyte length = diskio.f_readline(lineBuffer)
+            ubyte length
+            length, void = diskio.f_readline(lineBuffer)
+
             ; write line to memory as a fixed width record
-            blocks.write_record(BASE_PTR, BANK1, line)
+            blocks.poke_line_data(BANK1, line)
             line += 1
-            if (line <= 55) {
-              ;; PRINT TO SCREEN PROOF OF CONCEPT
-              ;; but only first 54 lines
-              blocks.print_test()
-            }
           }
+
           diskio.f_close()
-          ;; print status at bottom, will be replaced with the final status system
-          conv.str_ub(line)
+
+          blocks.draw_range(BANK1, currentLine, 55)
+
+;;; this may get removed ...
+; print status at bottom, will be replaced with the final status system
+          conv.str_uw(line)
           txt.print(conv.string_out)
           txt.print(" lines, x:")
           conv.str_ub(txt.get_column())
@@ -120,86 +148,40 @@ main {
   blocks {
     ; +----------+----------------------------------------------+----------+
     ; | PREV_PTR |                 DATA - LINE TEXT             | NEXT_PTR |
-    ; | 1 Word   |                 128 Bytes                    | 1 Word   |
+    ; | 2 Bytes  |                 128 Bytes                    | 2 Bytes  |
     ; +----------+----------------------------------------------+----------+
 
-    sub write_record (uword BASE_PTR, ubyte bank, ubyte line) {
-      ubyte i;
+    uword i;
 
+    ;; writes line to memory
+    sub poke_line_data (ubyte bank, uword line) {
 ;;; TODO - update pointer records for PREV/NEXT
-
+      uword THIS_REC = main.BASE_PTR + (main.RECSZ * line)
+      uword i
+      ubyte j = 0
       for i in 0 to main.DATSZ-1 {
-         uword THIS_REC = BASE_PTR + main.RECSZ * line
-         @(THIS_REC + main.PTRSZ + i) = main.lineBuffer[i]  ;; write to the memory bank
-         main.printBuffer[i] = @(THIS_REC + main.PTRSZ + i) ;; copy from the memory
-                                                            ;; bank to regular str variable
+         @(THIS_REC + main.PTRSZ + i) = main.lineBuffer[j]  ;; write to the memory bank
+         j = j + 1
       }
     }
 
-    ;; draw lines to screen based on starting record number
-    ;; and the screen size, HEIGHT x WIDTH
-    sub draw_range (ubyte startLine) {
+    sub draw_range (ubyte bank, uword startLine, uword numLines ) {
+      ubyte j
+      uword THIS_REC, line
+      txt.plot(0,0)
+      for line in startLine to numLines {
+        j = 0
+        THIS_REC = main.BASE_PTR + (main.RECSZ * line)
+        for i in 0 to main.DATSZ {
+           main.printBuffer[j] = @(THIS_REC + main.PTRSZ + i)
+           j = j + 1
+        }
+        print_line()
+      }
+    }
 
-    } 
-
-    sub print_test () {
+    sub print_line () {
       txt.print(main.printBuffer)
       txt.nl()
     }
   }
-
-
-  ; MarkTheStrange's fixed length records example ...
-  ;  pokew (address, value)
-  ;    writes the word value at the given address in memory, in usual little-endian lsb/msb byte order.
-  ;  peekw (address)
-  ;    reads the word value at the given address in memory. Word is read as usual little-endian lsb/msb byte order.
-
-;;   blocks {
-;;     const ubyte off_prev = 0
-;;     const ubyte off_next = 2
-;;     const ubyte off_size = 4
-;;     const ubyte off_data = 5
-;;     sub prev(uword blk) -> uword { return peekw(blk + off_prev) }
-;;     sub set_prev(uword blk, uword value) { pokew(blk + off_prev, value) }
-;;   ;  ...
-;;     sub size(uword blk) -> ubyte { return @(blk + off_size) }
-;;     sub set_size(uword blk, ubyte value) { @(blk + off_size) = value }
-;;   ;  ...
-;; }
-
-; TODO
-;  1. initially show just the visible line to screen
-;  2. but save all line to BANK via fixed records (see start below in the "block" package ...)
-;  3. implement up/down (k/j) and left/right (h/l) so we can get as far as navigating files
-;     such that the line shift up or down - or if the line is too long (what's that MAX here?)
-;     the line will shift left or right
-;  4. OPEN file (:tabedit)
-;     * right time to consider tabs? - each file is comfortably saved in each bank
-;     * gt (tab right), gT (tab left)
-;  5. implement line operations:
-;     + yy (yank)
-;     + dd (cut)
-;     + o  (new line below)
-;     + O  (new line above)
-;     + p  (paste clipboard buffer below)
-;     + P  (paste clipboard buffer above) 
-;  6. sort out INSERT mode, REPLACE mode
-;  7. SAVE (<ESC>+w, wq, q!)
-;  8. Other things
-;    * dogfood mode - work on this project inside of the emu,
-;    *   - multiple undo
-;    *   - temp file auto-save via .swp file  
-;    * jump to line N
-;    * jump to top
-;    * jump to bottom
-;    * "transparent" cursor
-;    * cycle over different color schemes
-;    * multi-line copy/paste ("visual" mode)
-;    * elite hacker mode
-;        - ability to play music loops for developer flow
-;        - support "compile / run" workflow without having to quit for,
-;          + BASIC  (PETSCII mode required?) - BASLOAD, etc
-;          + PASCAL (PETSCII mode required?) - compiler, run
-;          + or suspend/resume via "sysNNNN" - e.g., "ctrl-z"/"fg"
-
