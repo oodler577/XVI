@@ -78,6 +78,7 @@ main {
       goto navcharloop 
     }
 
+;; TODO - left off here ... working on scrolling past the bottom of the screen ...
     sub cursor_down_on_j () {
       ubyte c = txt.get_column()
       ubyte r = txt.get_row()
