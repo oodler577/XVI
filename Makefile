@@ -1,9 +1,7 @@
-PCC=prog8c
-
 all: clean build bundle run
 
 build:
-	$(PCC) -target cx16 src/xvi.p8
+	java -jar /Users/tempuser/Desktop/x16/prog8c-10.5.1-all.jar -target cx16 src/xvi.p8
 
 bundle:
 	rm -rfv ./XVI
@@ -13,7 +11,7 @@ bundle:
 	cp BASLOAD XVI/BASLOAD
 	
 	cp readme.txt XVI/readme.txt
-	zip -r XVI-1.2.0.zip XVI/ 
+	zip XVI-1.2.0.zip XVI/ 
 	mkdir ./releases 2> /dev/null || echo -n
 	cp *.zip releases/
 
@@ -24,13 +22,13 @@ trace:
 	x16emu -scale 2 -prg ./XVI -run -trace
 
 io-test:
-	$(PCC) -target cx16 src/file-io-test.p8
+	java -jar /Users/tempuser/Desktop/x16/prog8c-10.5.1-all.jar -target cx16 src/file-io-test.p8
 
 iso-test:
-	$(PCC) -target cx16 src/iso-test.p8
+	java -jar /Users/tempuser/Desktop/x16/prog8c-10.5.1-all.jar -target cx16 src/iso-test.p8
 
 txt-viewer:
-	$(PCC) -target cx16 src/txt-viewer.p8
+	java -jar /Users/tempuser/Desktop/x16/prog8c-10.5.1-all.jar -target cx16 src/txt-viewer.p8
 
 run-viewer:
 	x16emu -scale 2 -prg ./txt-viewer.prg -run -debug
