@@ -100,16 +100,16 @@ main {
               0 -> { ;; just "SHIFT+g" (no leading number)
                 cursor_down_on_G()
               }
-              1 -> { ;; single leading number + "SHIFT+g",
+              1 -> { ;; single leading number + "SHIFT+g", (only covers case of lines 1-9)
                 nngN = 0 ; reset leading number counter
-                if numb[0]-1 < main.lineShift {
+                if numb[0]-1 < main.lineShift { ; covers case when 1-9 is above the visible top line
                   main.lineShift = 0
                   txt.clear_screen();
                   txt.plot(main.minCol,main.minLine)
                   blocks.draw_range(BANK1, main.minLine-1, main.maxLine-1)
                   cursor.place_cursor(main.minCol,main.minLine+numb[0]-1)
                 }
-                else {
+                else {                          ; covers any other case, assumes 1-9 are in view goes there directly
                   cursor.place_cursor(main.minCol,main.minLine+numb[0]-1)
                 }
                 update_tracker()
@@ -117,10 +117,43 @@ main {
               }
               2 -> { ;; double leading number + "SHIFT+g"
                 nngN = 0 ; reset leading number counter
-                ;main.lineShift = numb[1] 
                 ubyte number = (numb[0]*10+numb[1]) ; combine array elements to an actual number
-                cursor.place_cursor(main.minCol,main.minLine+number-1)
-                update_tracker()
+
+                ; first IF block covers the situation where number
+                ;   is above the first currently visible line
+                if number-1 < main.TOT_LINES - main.lineShift {
+                  txt.clear_screen();
+                  txt.plot(main.minCol,main.minLine)
+                  if number <= main.maxLine {
+                    main.lineShift = 0
+                    blocks.draw_range(BANK1, main.minLine-1, main.maxLine-1)
+                    cursor.place_cursor(main.minCol,number)
+                  }
+                  else {
+                    main.lineShift = number-1 ; set number to be that top most line now (shifts down)
+                    blocks.draw_range(BANK1, number-1, main.maxLine-1)
+                    cursor.place_cursor(main.minCol,main.minLine)
+                  }
+                }
+
+;
+; TODO - left off here, need to cover:
+; 1. when NN is currently visible
+; 2. when NN is below the last visible line
+;
+
+                else if number-1 >= main.lineShift and number-1 <= main.lineShift-main.maxLine {
+                  ;; within current visible range - don't update lineShift
+                  cursor.place_cursor(main.minCol,number)
+                }
+;                else {
+;                  ;; below current visible range
+;                  main.lineShift = number-1 ; set number to be that top most line now (shifts down)
+;                  txt.clear_screen();
+;                  txt.plot(main.minCol,main.minLine)
+;                  blocks.draw_range(BANK1, number-1, main.maxLine-1)
+;                  cursor.place_cursor(main.minCol,main.minLine)
+;                } 
                 goto navcharloop
               }
             }
