@@ -15,7 +15,7 @@ main {
     str blankLine           = " " * DATSZ 
     str printBuffer         = " " * DATSZ 
     str lineBuffer          = " " * DATSZ 
-    ubyte TOT_LINES         = 0
+    uword TOT_LINES         = 0
     const uword PTRSZ       = 2 ; in Bytes
     const uword RECSZ       = PTRSZ + DATSZ + PTRSZ 
     const ubyte BANK1       = 1
@@ -31,10 +31,11 @@ main {
     const uword VERA_DATA1  = $9F24
     const uword VERA_CTRL   = $9F25
 
-    ubyte lineShift         = 0 ; track by how many lines the view port has shift from 0,0 
+    uword lineShift         = 0 ; track by how many lines the view port has shift from 0,0 
     const ubyte minCol      = 3
     const ubyte minLine     = 1
     const ubyte maxCol      = 78
+    const ubyte midLine     = 27
     const ubyte maxLine     = 56
     const ubyte footerLine  = 58
 
@@ -72,10 +73,10 @@ main {
     sub cursor_down_on_G () {
       main.lineShift = main.TOT_LINES-main.maxLine
       txt.plot(main.minCol,main.minLine)
-      blocks.draw_range(BANK1, main.lineShift, main.lineShift+main.maxLine-1)
+      blocks.draw_range(BANK1, main.lineShift, main.lineShift-1+main.maxLine-1)
       update_tracker()
       ;; move actual cursor
-      cursor.place_cursor(main.minCol,main.maxLine)
+      cursor.place_cursor(main.minCol,main.maxLine-1)
     }
 
     sub start() {
@@ -83,12 +84,13 @@ main {
       ubyte char = 0 
       txt.clear_screen();
       txt.iso()
-      load_file("samples/sample4.txt", BANK1) 
+      load_file("samples/sample3.txt", BANK1) 
 
       ubyte    delN  = 0        ; dd (delete line) counter
       ubyte    cpyN  = 0        ; YY (copline) counter
       ubyte    nngN  = 0        ; NN SHIFT+g counter
       ubyte[2] numb  = [0] * 2  ; digit for "NN SHIFT+g"
+      uword    tmprow
 
     navcharloop:
       void, char = cbm.GETIN()
@@ -107,27 +109,27 @@ main {
                   txt.clear_screen();
                   txt.plot(main.minCol,main.minLine)
                   blocks.draw_range(BANK1, main.minLine-1, main.maxLine-1)
-                  cursor.place_cursor(main.minCol,main.minLine+numb[0]-1)
+                  tmprow = (main.minLine+numb[0]-1)
+                  cursor.place_cursor(main.minCol, tmprow as ubyte)
                 }
                 else {                          ; covers any other case, assumes 1-9 are in view goes there directly
-                  cursor.place_cursor(main.minCol,main.minLine+numb[0]-1)
+                  tmprow = (main.minLine+numb[0]-1)
+                  cursor.place_cursor(main.minCol, tmprow as ubyte)
                 }
                 update_tracker()
                 goto navcharloop
               }
               2 -> { ;; double leading number + "SHIFT+g"
                 nngN = 0 ; reset leading number counter
-                ubyte number = (numb[0]*10+numb[1]) ; combine array elements to an actual number
-
-                ; first IF block covers the situation where number
-                ;   is above the first currently visible line
-                if number-1 < main.TOT_LINES - main.lineShift {
+                uword number = (numb[0]*10+numb[1]); combine array elements to an actual number
+                ;; above current top line
+                if number-1 < main.lineShift {
                   txt.clear_screen();
                   txt.plot(main.minCol,main.minLine)
                   if number <= main.maxLine {
                     main.lineShift = 0
                     blocks.draw_range(BANK1, main.minLine-1, main.maxLine-1)
-                    cursor.place_cursor(main.minCol,number)
+                    cursor.place_cursor(main.minCol, number as ubyte)
                   }
                   else {
                     main.lineShift = number-1 ; set number to be that top most line now (shifts down)
@@ -135,25 +137,23 @@ main {
                     cursor.place_cursor(main.minCol,main.minLine)
                   }
                 }
-
-;
-; TODO - left off here, need to cover:
-; 1. when NN is currently visible
-; 2. when NN is below the last visible line
-;
-
-                else if number-1 >= main.lineShift and number-1 <= main.lineShift-main.maxLine {
+                ;; visible portion - between current top line and last line
+                else if number-1 >= main.lineShift and number-1 <= main.lineShift + main.maxLine-1 {
                   ;; within current visible range - don't update lineShift
-                  cursor.place_cursor(main.minCol,number)
+                  tmprow=(number-main.lineShift)
+                  cursor.place_cursor(main.minCol,tmprow as ubyte)
                 }
-;                else {
-;                  ;; below current visible range
-;                  main.lineShift = number-1 ; set number to be that top most line now (shifts down)
-;                  txt.clear_screen();
-;                  txt.plot(main.minCol,main.minLine)
-;                  blocks.draw_range(BANK1, number-1, main.maxLine-1)
-;                  cursor.place_cursor(main.minCol,main.minLine)
-;                } 
+                ; first IF block covers the situation where number
+                ;   is above the first currently visible line
+                else if number-1 >= main.lineShift + main.maxLine {
+                  ;; below current visible range
+                  main.lineShift = number-1-22
+                  txt.clear_screen();
+                  txt.plot(main.minCol,main.minLine)
+                  blocks.draw_range(BANK1, main.lineShift, main.maxLine)
+                  cursor.place_cursor(main.minCol, main.maxLine)
+                }
+                update_tracker()
                 goto navcharloop
               }
             }
@@ -281,8 +281,8 @@ main {
         conv.str_ub(col)
         txt.print(conv.string_out)
         txt.print(", y:")
-        ubyte row = r - main.minLine + 1
-        conv.str_ub(row)
+        uword row = r - main.minLine + main.lineShift + 1
+        conv.str_uw(row)
         txt.print(conv.string_out)
         txt.plot(c,r)
      }
