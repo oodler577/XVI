@@ -15,13 +15,14 @@ main {
     str blankLine           = " " * DATSZ 
     str printBuffer         = " " * DATSZ 
     str lineBuffer          = " " * DATSZ 
+    str cmdBuffer           = " " * DATSZ
     uword TOT_LINES         = 0
+    uword lineShift         = 0           ; track by how many lines the view port has shift from 0,0 
+    str currFilename        = " " * 128   ; for defining the path of the file to open
+
     const uword PTRSZ       = 2 ; in Bytes
     const uword RECSZ       = PTRSZ + DATSZ + PTRSZ 
     const ubyte BANK1       = 1
-
-    ; for defining the path of the file to open
-    str currFilename        = " " * 128
 
     const uword BASE_PTR    = $A000
     const uword VERA_ADDR_L = $9F20
@@ -31,13 +32,20 @@ main {
     const uword VERA_DATA1  = $9F24
     const uword VERA_CTRL   = $9F25
 
-    uword lineShift         = 0 ; track by how many lines the view port has shift from 0,0 
     const ubyte minCol      = 3
     const ubyte minLine     = 1
     const ubyte maxCol      = 78
     const ubyte midLine     = 27
     const ubyte maxLine     = 56
     const ubyte footerLine  = 58
+
+    const ubyte NAV         = 1 ; modal state for navigation, default state
+    const ubyte EDI         = 2 ; modal state for insert mode, triggered with ctrl-i
+    const ubyte REPLACE     = 3 ; modal state for replacement mode, triggered with ctrl-r
+    const ubyte COMMAND     = 3 ; modal state for entering a command
+
+    ubyte MODE              = main.NAV ; set initial state to navigation
+ 
 
     sub vtg(ubyte col, ubyte row) {
       vtui.gotoxy(col, row)
@@ -84,7 +92,7 @@ main {
       ubyte char = 0 
       txt.clear_screen();
       txt.iso()
-      load_file("samples/sample3.txt", BANK1) 
+      load_file("samples/sample6.txt", BANK1) 
 
       ubyte    delN  = 0        ; dd (delete line) counter
       ubyte    cpyN  = 0        ; YY (copline) counter
@@ -190,6 +198,60 @@ main {
       }
 
       when char {
+        $1b -> {       ; ESC key, throw into NAV mode from any other mode
+          update_tracker()
+          main.MODE = main.NAV
+        }
+;; IN PROGRESS - working on COMMAND MODE and accepting commands ...
+        $3a -> {       ; ':', command mode
+          if main.MODE == main.NAV {
+            main.MODE = main.COMMAND
+            command_prompt()
+            ubyte cmdchar  = $60
+            ubyte cmdi     = 0
+            cmdcharloop:
+              void, cmdchar = cbm.GETIN()
+              when cmdchar {
+                $1b -> {
+                  txt.plot(main.minCol,main.minLine)
+                  update_tracker()
+                  goto navcharloop
+                }
+                $0d -> {                                   ; <ENTER> ... dispatch command here
+                  txt.plot(main.minCol,main.minLine)
+;; DEBUG - now parse command and do something (first: open up file with "e FILENAME")
+;txt.plot(main.minCol, main.minLine)
+;txt.print(blankLine)
+;txt.plot(main.minCol, main.minLine)
+                  if main.cmdBuffer[0] == $65 {
+                    txt.plot(1, main.footerLine)
+                    txt.print(main.blankLine)
+                    txt.plot(1, main.footerLine)
+                    txt.print("opening file ...")
+                  }
+;txt.print(main.cmdBuffer)
+                  sys.wait(10)
+                  update_tracker()
+;; ALSO TODO - 
+;; * organize the code into subroutines
+;; * add some comments around state/flow control
+;; ....
+                  goto navcharloop ; go back to main navloop
+                }
+                else -> {
+                  if cmdchar >= $20 and cmdchar <= $7e  {
+                    main.cmdBuffer[cmdi] = cmdchar ;; .. !! NEXT - need to figure out this assignment
+                    cbm.CHROUT(cmdchar)
+                    cmdi++
+                  }
+                }
+              }
+              goto cmdcharloop
+          }
+        }
+        $65 -> {       ; 'e', for :e[dit] FILENAME
+
+        }
         $68 -> {       ; 'h', LEFT 
           cursor_left_on_h()
         }
@@ -266,6 +328,15 @@ main {
           cursor.init()
           cursor.place_cursor(main.minCol,main.minLine) ;; move actual cursor
         }
+     }
+
+     sub command_prompt () {
+        ubyte c = txt.get_column()
+        ubyte r = txt.get_row()
+        txt.plot(0, main.footerLine) ; move cursor to the starting position for writing
+        txt.print(main.blankLine)
+        txt.plot(1, main.footerLine)
+        txt.print("<CMD> : ")
      }
 
      sub update_tracker () {
