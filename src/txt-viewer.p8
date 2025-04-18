@@ -239,10 +239,16 @@ main {
                   goto navcharloop ; go back to main navloop
                 }
                 else -> {
-                  if cmdchar >= $20 and cmdchar <= $7e  {
-                    main.cmdBuffer[cmdi] = cmdchar ;; .. !! NEXT - need to figure out this assignment
+                  if cmdchar >= $20 and cmdchar <= $7f  {
+;; HOW to handle backspace in CMD window???
+                    if cmdchar == $7f or cmdchar == $08 {
+                      cmdi--
+                    }
+                    else {
+                      main.cmdBuffer[cmdi] = cmdchar ;; .. !! NEXT - need to figure out this assignment
+                      cmdi++
+                    }
                     cbm.CHROUT(cmdchar)
-                    cmdi++
                   }
                 }
               }
