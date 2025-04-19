@@ -27,10 +27,10 @@ io-test:
 iso-test:
 	java -jar /Users/tempuser/Desktop/x16/prog8c-10.5.1-all.jar -target cx16 src/iso-test.p8
 
-txt-viewer:
+xvi2:
 	java -jar /Users/tempuser/Desktop/x16/prog8c-10.5.1-all.jar -target cx16 src/txt-viewer.p8
 
-run-viewer:
+run-xvi2:
 	x16emu -scale 2 -prg ./txt-viewer.prg -run -debug
 
 debug:
