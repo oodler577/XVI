@@ -23,32 +23,35 @@ blocks {
     }
   }
 
-  sub draw_range (ubyte bank, uword startLine, uword numLines ) {
+  sub draw_range (ubyte bank, uword startIndex, uword endIndex) {
     ubyte j
     uword REC_START, line
-    for line in startLine to numLines {
+    for line in startIndex to endIndex {
       j = 0
       for i in 0 to main.DATSZ-1 {
          main.printBuffer[j] = 00 
-         j = j + 1
+         j += 1
       }
       j = 0
       REC_START = main.BASE_PTR + (main.RECSZ * line)
       for i in 0 to main.DATSZ-1 {
          main.printBuffer[j] = @(REC_START + main.PTRSZ + i)
-         j = j + 1
+         j += 1
       }
       print_line(line)
     }
+    txt.plot(main.LEFT_TEXTBOX_MARGIN, txt.get_row()-1)
   }
 
   sub print_line (uword line) {
-    conv.str_uw(line+1)
     ; start printing at main.LEFT_TEXTBOX_MARGIN, keep row the same
-    txt.plot(main.LEFT_TEXTBOX_MARGIN, txt.get_row())
+    txt.plot(0, txt.get_row())
     txt.print(main.blankLine)
     txt.plot(0, txt.get_row())
+    ; print line number
+    conv.str_uw(line+1)
     txt.print(conv.string_out)
+    ; print line
     txt.plot(main.LEFT_TEXTBOX_MARGIN, txt.get_row())
     txt.print(main.printBuffer)
     txt.nl()

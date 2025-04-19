@@ -12,7 +12,7 @@
 
 main {
     const uword DATSZ       = 76
-    str blankLine           = " " * DATSZ 
+    str blankLine           = " " * 79 
     str printBuffer         = " " * DATSZ 
     str lineBuffer          = " " * DATSZ 
     str cmdBuffer           = " " * DATSZ
@@ -73,6 +73,7 @@ main {
     ; jumps to the very end of the document
     sub cursor_down_on_G () { ;; BROKEN
       main.FIRST_LINE_INDEX = main.TOT_LINES-main.TEXTBOX_HEIGHT
+      txt.clear_screen()
       txt.plot(main.LEFT_TEXTBOX_MARGIN,main.TOP_TEXTBOX_LINE)
       blocks.draw_range(CURRENT_BANK, main.FIRST_LINE_INDEX, main.FIRST_LINE_INDEX-1+main.BOT_TEXTBOX_LINE-1)
       cursor.update_tracker()
@@ -293,6 +294,7 @@ main {
       }
       else if (main.FIRST_LINE_INDEX + main.BOT_TEXTBOX_LINE < main.TOT_LINES) {
         main.FIRST_LINE_INDEX += 1
+        ;txt.clear_screen()
         txt.plot(main.LEFT_TEXTBOX_MARGIN,main.TOP_TEXTBOX_LINE) ; position for full screen redraw
         blocks.draw_range(CURRENT_BANK, main.FIRST_LINE_INDEX, main.FIRST_LINE_INDEX+main.BOT_TEXTBOX_LINE-1) ; full screen redraw
         cursor.place_cursor(c,r)      ;; move actual cursor
@@ -309,6 +311,7 @@ main {
       }
       else if (main.FIRST_LINE_INDEX > 0) {
         main.FIRST_LINE_INDEX -= 1
+        ;txt.clear_screen()
         txt.plot(main.LEFT_TEXTBOX_MARGIN,main.TOP_TEXTBOX_LINE)
         blocks.draw_range(CURRENT_BANK, main.FIRST_LINE_INDEX, main.FIRST_LINE_INDEX+main.BOT_TEXTBOX_LINE-1)
         cursor.update_tracker()
@@ -350,6 +353,7 @@ main {
             TOT_LINES += 1
           }
           diskio.f_close()
+          txt.clear_screen()
           txt.plot(main.LEFT_TEXTBOX_MARGIN,main.TOP_TEXTBOX_LINE)
           blocks.draw_range(CURRENT_BANK, 0, main.BOT_TEXTBOX_LINE-1)
           cursor.update_tracker()
