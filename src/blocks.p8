@@ -44,12 +44,12 @@ blocks {
 
   sub print_line (uword line) {
     conv.str_uw(line+1)
-    ; start printing at main.minCol, keep row the same
-    txt.plot(main.minCol, txt.get_row())
+    ; start printing at main.LEFT_TEXTBOX_MARGIN, keep row the same
+    txt.plot(main.LEFT_TEXTBOX_MARGIN, txt.get_row())
     txt.print(main.blankLine)
     txt.plot(0, txt.get_row())
     txt.print(conv.string_out)
-    txt.plot(main.minCol, txt.get_row())
+    txt.plot(main.LEFT_TEXTBOX_MARGIN, txt.get_row())
     txt.print(main.printBuffer)
     txt.nl()
   }
