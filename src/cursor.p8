@@ -56,8 +56,8 @@ cursor {
      sub command_prompt () {
         txt.plot(0, main.FOOTER_LINE) ; move cursor to the starting position for writing
         txt.print(main.blankLine)
-        txt.plot(1, main.FOOTER_LINE)
-        txt.print("<CMD> : ")
+        txt.plot(0, main.FOOTER_LINE)
+        txt.print(": ")
      }
 
 }

@@ -196,12 +196,14 @@ main {
             goto NAVCHARLOOP
           }
       }
+;
+;; IN PROGRESS - working on COMMAND MODE and accepting s ...
+;
       when char {
         $1b -> {       ; ESC key, throw into NAV mode from any other mode
           cursor.update_tracker()
           main.MODE = main.NAV
         }
-;; IN PROGRESS - working on COMMAND MODE and accepting s ...
         $3a -> {       ; ':',  mode
           if main.MODE == main.NAV {
             main.MODE = main.COMMAND
@@ -264,7 +266,7 @@ main {
         'k',$91 -> {       ; $6b, UP
           cursor_up_on_k()
         }
-        'l',$1d -> {   ; $6c, RIGHT 
+        'l',$1d -> {       ; $6c, RIGHT 
           cursor_right_on_l()
         }
       }
