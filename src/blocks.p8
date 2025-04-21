@@ -56,4 +56,12 @@ blocks {
     txt.print(main.printBuffer)
     txt.nl()
   }
+
+  sub clear_bank () {
+    uword A;
+    for A in main.BASE_PTR to $BFFF {
+      @(A) = 0 ; poke 0 to memory address
+        A += 1 ; increment memory address by 1
+    }
+  }
 }

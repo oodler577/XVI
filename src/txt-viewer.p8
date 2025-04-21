@@ -15,7 +15,8 @@ main {
     str blankLine           = " " * 79 
     str printBuffer         = " " * DATSZ 
     str lineBuffer          = " " * DATSZ 
-    str cmdBuffer           = " " * DATSZ
+    const ubyte CMDBUFFER_SIZE = 50
+    str cmdBuffer           = " " * CMDBUFFER_SIZE
     uword TOT_LINES         = 0
     uword FIRST_LINE_INDEX  = 0           ; buffer index of the line that is in the topmost line of the TEXTBOX
     str currFilename        = " " * 128   ; for defining the path of the file to open
@@ -43,10 +44,10 @@ main {
     const ubyte FOOTER_LINE       = 58
 
     ; defined mode constants
-    const ubyte NAV         = 1 ; modal state for navigation, default state
-    const ubyte EDI         = 2 ; modal state for insert mode, triggered with ctrl-i
-    const ubyte REPLACE     = 3 ; modal state for replacement mode, triggered with ctrl-r
-    const ubyte COMMAND     = 3 ; modal state for entering a 
+    const ubyte NAV            = 1 ; modal state for navigation, default state
+    const ubyte EDI            = 2 ; modal state for insert mode, triggered with ctrl-i
+    const ubyte REPLACE        = 3 ; modal state for replacement mode, triggered with ctrl-r
+    const ubyte COMMAND        = 3 ; modal state for entering a 
 
     ; current mode
     ubyte MODE              = NAV ; set initial state to navigation
@@ -146,13 +147,8 @@ main {
       txt.clear_screen();
       txt.iso()
       load_file("samples/sample6.txt", CURRENT_BANK) 
-
-      ;ubyte    delN  = 0        ; dd (delete line) counter
-      ;ubyte    cpyN  = 0        ; YY (copline) counter
-
-    navcharloop:
+     NAVCHARLOOP:
       void, char = cbm.GETIN()
-
       ; catch leading numbers for "NN SHIFT+g"
       when char {
           $47 -> { ; jump to the bottom (SHIFT+g)
@@ -162,11 +158,11 @@ main {
               }
               1 -> { ;; single leading number + "SHIFT+g", (only covers case of lines 1-9)
                 cursor_down_on_nG()
-                goto navcharloop
+                goto NAVCHARLOOP
               }
               2 -> { ;; double leading number + "SHIFT+g"
                 cursor_down_on_nnG()
-                goto navcharloop
+                goto NAVCHARLOOP
               }
             }
           }
@@ -187,7 +183,7 @@ main {
               }
 
             }
-            goto navcharloop
+            goto NAVCHARLOOP
           }
           $31,$32,$33,$34,$35,$36,$37,$38,$39 -> { ; digits 1-9
             if nngN < 2 {
@@ -197,10 +193,9 @@ main {
             else {
               nngN = 0
             }
-            goto navcharloop
+            goto NAVCHARLOOP
           }
       }
-
       when char {
         $1b -> {       ; ESC key, throw into NAV mode from any other mode
           cursor.update_tracker()
@@ -213,38 +208,39 @@ main {
             cursor.command_prompt()
             ubyte cmdchar  = $60
             ubyte cmdi     = 0
-            cmdcharloop:
+           CMDCHARLOOP:
               void, cmdchar = cbm.GETIN()
               when cmdchar {
                 $1b -> {
                   txt.plot(main.LEFT_TEXTBOX_MARGIN,main.TOP_TEXTBOX_LINE)
                   cursor.update_tracker()
-                  goto navcharloop
+                  goto NAVCHARLOOP
                 }
-                $0d -> {                                   ; <ENTER> ... dispatch  here
+                $0d -> { ; <ENTER> ... dispatch commands  here
                   txt.plot(main.LEFT_TEXTBOX_MARGIN,main.TOP_TEXTBOX_LINE)
-;; DEBUG - now parse  and do something (first: open up file with "e FILENAME")
-;txt.plot(main.LEFT_TEXTBOX_MARGIN, main.TOP_TEXTBOX_LINE)
-;txt.print(blankLine)
-;txt.plot(main.LEFT_TEXTBOX_MARGIN, main.TOP_TEXTBOX_LINE)
-                  if main.cmdBuffer[0] == $65 {
-                    txt.plot(1, main.FOOTER_LINE)
-                    txt.print(main.blankLine)
-                    txt.plot(1, main.FOOTER_LINE)
-                    txt.print("opening file ...")
+                  when main.cmdBuffer[0] {
+                    'e' -> {
+                      txt.plot(1, main.FOOTER_LINE)
+                      txt.print(main.blankLine)
+                      txt.plot(1, main.FOOTER_LINE)
+                      str fn1 = " " * main.CMDBUFFER_SIZE 
+                      ; parse out file name (everything after ":e")
+                      string.slice(main.cmdBuffer, 2, string.length(main.cmdBuffer), fn1)
+                      string.strip(fn1)
+                      load_file(fn1, CURRENT_BANK)
+                    }
+                    'q' -> {
+                      txt.iso_off()
+                      sys.exit(0)
+                    }
                   }
-;txt.print(main.cmdBuffer)
                   sys.wait(10)
                   cursor.update_tracker()
-;; ALSO TODO - 
-;; * organize the code into subroutines
-;; * add some comments around state/flow control
-;; ....
-                  goto navcharloop ; go back to main navloop
+                  goto NAVCHARLOOP ; go back to main navloop
                 }
                 else -> {
                   if cmdchar >= $20 and cmdchar <= $7f  {
-;; HOW to handle backspace in CMD window???
+                    ;; TODO - figure out how handle backspace in the CMD window???
                     if cmdchar == $7f or cmdchar == $08 {
                       cmdi--
                     }
@@ -256,30 +252,23 @@ main {
                   }
                 }
               }
-              goto cmdcharloop
+              goto CMDCHARLOOP
           }
         }
-        $65 -> {       ; 'e', for :e[dit] FILENAME
-
-        }
-        $68 -> {       ; 'h', LEFT 
+        'h',$9d -> {       ; $68, LEFT 
           cursor_left_on_h()
         }
-        $6a -> {       ; 'j', DOWN
+        'j',$11 -> {       ; $6a, DOWN
           cursor_down_on_j()
         }
-        $6b -> {       ; 'k', UP
+        'k',$91 -> {       ; $6b, UP
           cursor_up_on_k()
         }
-        $6c -> {       ; 'l', RIGHT 
+        'l',$1d -> {   ; $6c, RIGHT 
           cursor_right_on_l()
         }
-        $71 -> {       ; 'q'
-          txt.iso_off()
-          sys.exit(0)
-        }
       }
-      goto navcharloop 
+      goto NAVCHARLOOP 
     }
 
     sub cursor_down_on_j () {
@@ -336,13 +325,15 @@ main {
     }
 
     sub load_file(str filepath, ubyte BANK) {
+        blocks.clear_bank()
         cbm.CLEARST() ; set so READST() is initially known to be clear
         if diskio.f_open(filepath) {
+          main.TOT_LINES = 0
           main.currFilename = filepath
           while cbm.READST() == 0 {
             ;; reset these buffers
-            lineBuffer  = " " * 76
-            printBuffer = " " * 76
+            lineBuffer  = " " * DATSZ
+            printBuffer = " " * DATSZ 
             ; read line
             ubyte length
             length, void = diskio.f_readline(lineBuffer)
