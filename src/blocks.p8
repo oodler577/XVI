@@ -49,7 +49,7 @@ blocks {
     txt.print(main.blankLine)
     txt.plot(0, txt.get_row())
     ; print line number
-    conv.str_uw(line+1)
+    void conv.str_uw(line+1)
     txt.print(conv.string_out)
     ; print line
     txt.plot(main.LEFT_TEXTBOX_MARGIN, txt.get_row())

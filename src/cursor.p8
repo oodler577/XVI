@@ -38,24 +38,22 @@ cursor {
        ubyte c = txt.get_column() ; get current
        ubyte r = txt.get_row()
        txt.plot(0, main.FOOTER_LINE) ; move cursor to the starting position for writing
-       conv.str_uw(main.TOT_LINES)
+       void conv.str_uw(main.TOT_LINES)
        txt.print(main.blankLine)
        txt.plot(0, main.FOOTER_LINE) ; move cursor to the starting position for writing
        txt.print(conv.string_out)
        txt.print(" lines, x:")
        ubyte col = c - main.LEFT_TEXTBOX_MARGIN + 1
-       conv.str_ub(col)
+       void conv.str_ub(col)
        txt.print(conv.string_out)
        txt.print(", y:")
        uword row = r - main.TOP_TEXTBOX_LINE + main.FIRST_LINE_INDEX + 1
-       conv.str_uw(row)
+       void conv.str_uw(row)
        txt.print(conv.string_out)
        txt.plot(c,r)
      }
 
      sub command_prompt () {
-        ubyte c = txt.get_column()
-        ubyte r = txt.get_row()
         txt.plot(0, main.FOOTER_LINE) ; move cursor to the starting position for writing
         txt.print(main.blankLine)
         txt.plot(1, main.FOOTER_LINE)

@@ -49,7 +49,7 @@ main {
     const ubyte COMMAND     = 3 ; modal state for entering a 
 
     ; current mode
-    ubyte MODE              = main.NAV ; set initial state to navigation
+    ubyte MODE              = NAV ; set initial state to navigation
  
 
     sub vtg(ubyte col, ubyte row) {
@@ -137,9 +137,7 @@ main {
 ;;          main.FIRST_LINE_INDEX = number-1-22
 ;;          txt.clear_screen();
 ;;          txt.plot(main.LEFT_TEXTBOX_MARGIN,main.TOP_TEXTBOX_LINE)
-;;          blocks.draw_range(CURRENT_BANK, main.FIRST_LINE_INDEX, main.BOT_TEXTBOX_LINE)
-;;          cursor.place_cursor(main.LEFT_TEXTBOX_MARGIN, main.BOT_TEXTBOX_LINE)
-;;        }
+;;          blocks.draw_range(CURRENT_BANK, main.FIRST_LINE_INDEX, main.BOT_TEXTBOX_LINE) ;;          cursor.place_cursor(main.LEFT_TEXTBOX_MARGIN, main.BOT_TEXTBOX_LINE) ;;        }
     }
 
     sub start() {
@@ -149,8 +147,8 @@ main {
       txt.iso()
       load_file("samples/sample6.txt", CURRENT_BANK) 
 
-      ubyte    delN  = 0        ; dd (delete line) counter
-      ubyte    cpyN  = 0        ; YY (copline) counter
+      ;ubyte    delN  = 0        ; dd (delete line) counter
+      ;ubyte    cpyN  = 0        ; YY (copline) counter
 
     navcharloop:
       void, char = cbm.GETIN()
@@ -297,7 +295,7 @@ main {
         ;txt.clear_screen()
         txt.plot(main.LEFT_TEXTBOX_MARGIN,main.TOP_TEXTBOX_LINE) ; position for full screen redraw
         blocks.draw_range(CURRENT_BANK, main.FIRST_LINE_INDEX, main.FIRST_LINE_INDEX+main.BOT_TEXTBOX_LINE-1) ; full screen redraw
-        cursor.place_cursor(c,r)      ;; move actual cursor
+        cursor.place_cursor(c,r)           ;; move actual cursor
         cursor.update_tracker()
       }
     }
@@ -305,8 +303,8 @@ main {
     sub cursor_up_on_k () {
       ubyte c = txt.get_column()
       ubyte r = txt.get_row()
-      if r > main.TOP_TEXTBOX_LINE { ;; enforce bottom line bounds
-        cursor.place_cursor(c,r-1)      ;; move actual cursor
+      if r > main.TOP_TEXTBOX_LINE {       ;; enforce bottom line bounds
+        cursor.place_cursor(c,r-1)         ;; move actual cursor
         cursor.update_tracker()
       }
       else if (main.FIRST_LINE_INDEX > 0) {
@@ -315,15 +313,15 @@ main {
         txt.plot(main.LEFT_TEXTBOX_MARGIN,main.TOP_TEXTBOX_LINE)
         blocks.draw_range(CURRENT_BANK, main.FIRST_LINE_INDEX, main.FIRST_LINE_INDEX+main.BOT_TEXTBOX_LINE-1)
         cursor.update_tracker()
-        cursor.place_cursor(c,r)      ;; move actual cursor
+        cursor.place_cursor(c,r)           ;; move actual cursor
       }
     }
 
     sub cursor_left_on_h () {
       ubyte c = txt.get_column()
       ubyte r = txt.get_row()
-      if c-1 >= main.LEFT_TEXTBOX_MARGIN { ;; enforce LHS bounds
-        cursor.place_cursor(c-1,r)         ;; move actual cursor
+      if c-1 >= main.LEFT_TEXTBOX_MARGIN {  ;; enforce LHS bounds
+        cursor.place_cursor(c-1,r)          ;; move actual cursor
         cursor.update_tracker()
       }
     }
@@ -331,8 +329,8 @@ main {
     sub cursor_right_on_l () {
       ubyte c = txt.get_column()
       ubyte r = txt.get_row()
-      if c+1 <= main.RIGHT_TEXTBOX_MARGIN {        ;; enforce RHS bounds
-        cursor.place_cursor(c+1,r)   ;; move actual cursor
+      if c+1 <= main.RIGHT_TEXTBOX_MARGIN { ;; enforce RHS bounds
+        cursor.place_cursor(c+1,r)          ;; move actual cursor
         cursor.update_tracker()
       }
     }
