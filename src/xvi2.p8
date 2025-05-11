@@ -43,19 +43,18 @@ main {
 
     ; define segment of the document buffer that is currently visible via
     ; the view port (TEXTBOX)
-    uword DOC_LENGTH     = 0
-    uword FIRST_LINE_IDX  = 0 ; buffer index of the line that is shown at the top of the TEXTBOX (view port)
-    uword LAST_LINE_IDX       ; buffer index of the line that is show at the bottom of the TEXTBOX 
+    uword DOC_LENGTH          = 0
+    uword FIRST_LINE_IDX      = 0 ; buffer index of the line that is shown at the top of the TEXTBOX (view port)
+    uword LAST_LINE_IDX           ; buffer index of the line that is show at the bottom of the TEXTBOX 
 
     ; defined mode constants
-    const ubyte NAV            = 1 ; modal state for navigation, default state
-    const ubyte EDI            = 2 ; modal state for insert mode, triggered with ctrl-i
-    const ubyte REPLACE        = 3 ; modal state for replacement mode, triggered with ctrl-r
-    const ubyte COMMAND        = 3 ; modal state for entering a 
+    const ubyte NAV           = 1 ; modal state for navigation, default state
+    const ubyte EDI           = 2 ; modal state for insert mode, triggered with ctrl-i
+    const ubyte REPLACE       = 3 ; modal state for replacement mode, triggered with ctrl-r
+    const ubyte COMMAND       = 3 ; modal state for entering a 
 
     ; current mode
-    ubyte MODE              = NAV ; set initial state to navigation
- 
+    ubyte MODE                = NAV ; set initial state to navigation
 
     sub vtg(ubyte col, ubyte row) {
       vtui.gotoxy(col, row)
@@ -95,7 +94,6 @@ main {
     ; handles <number>+SHIFT+G
     sub cursor_down_on_nG() {
       nngN = 0 ; reset leading number counter
-
       if numb[0]-1 < main.FIRST_LINE_IDX { ; covers case when 1-9 is above the visible top line
         ; we want 1 to be the first line here
         main.FIRST_LINE_IDX = 0
@@ -133,6 +131,7 @@ main {
         cursor.update_tracker()
         cursor.place_cursor(main.LEFT_MARGIN, main.TOP_LINE as ubyte)  ; place cursor where the text ends
       }
+      ;; when NEXT_LINE is below the view port
       else if LINE_IDX > main.LAST_LINE_IDX {
         ; update FIRST_LINE_IDX
         main.FIRST_LINE_IDX = LINE_IDX
@@ -152,7 +151,8 @@ main {
         cursor.place_cursor(main.LEFT_MARGIN, eot as ubyte)   ; place cursor where the text ends
       }
     }
-    ; need one that handles <number><number><number>+SHIFT+G
+
+; TODO need one that handles <number><number><number>+SHIFT+G
 
     sub start() {
       init_canvas()
