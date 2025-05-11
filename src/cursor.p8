@@ -38,16 +38,16 @@ cursor {
        ubyte c = txt.get_column() ; get current
        ubyte r = txt.get_row()
        txt.plot(0, main.FOOTER_LINE) ; move cursor to the starting position for writing
-       void conv.str_uw(main.TOT_LINES)
+       void conv.str_uw(main.DOC_LENGTH)
        txt.print(main.blankLine)
        txt.plot(0, main.FOOTER_LINE) ; move cursor to the starting position for writing
        txt.print(conv.string_out)
        txt.print(" lines, x:")
-       ubyte col = c - main.LEFT_TEXTBOX_MARGIN + 1
+       ubyte col = c - main.LEFT_MARGIN + 1
        void conv.str_ub(col)
        txt.print(conv.string_out)
        txt.print(", y:")
-       uword row = r - main.TOP_TEXTBOX_LINE + main.FIRST_LINE_INDEX + 1
+       uword row = r - main.TOP_LINE + main.FIRST_LINE_IDX + 1
        void conv.str_uw(row)
        txt.print(conv.string_out)
        txt.plot(c,r)
