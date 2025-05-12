@@ -113,6 +113,10 @@ main {
       uword NEXT_LINE = (numb[0]*10+numb[1]); combine array elements to an actual LINE
       uword LINE_IDX = NEXT_LINE - 1
 
+      if NEXT_LINE > main.DOC_LENGTH {
+        return;
+      }
+
       ;; NEXT_LINE is in current view, so just jump cursor to that line; no re-rendering or reassigning FIRST_LINE_IDX
       if LINE_IDX >= main.FIRST_LINE_IDX and LINE_IDX <= main.HEIGHT {
         cursor.update_tracker()
