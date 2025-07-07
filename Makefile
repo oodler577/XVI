@@ -30,8 +30,11 @@ iso-test:
 xvi2:
 	java -jar /Users/tempuser/Desktop/x16/prog8c-10.5.1-all.jar -target cx16 src/xvi2.p8
 
-run-xvi2:
-	x16emu -scale 2 -prg ./xvi2.prg -run -debug
+run2:
+	x16emu -scale 2 -prg ./xvi2.prg -run -gif demo.gif
+
+run-xvi2-no-scale:
+	x16emu -prg ./xvi2.prg -run -debug
 
 debug:
 	x16emu -scale 2 -prg ./XVI -run -debug

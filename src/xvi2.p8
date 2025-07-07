@@ -5,7 +5,6 @@
 %import diskio
 %import blocks
 %import cursor
-%import vtui
 %option no_sysinit
 %zeropage basicsafe
 %encoding iso
@@ -55,20 +54,6 @@ main {
 
     ; current mode
     ubyte MODE                = NAV ; set initial state to navigation
-
-    sub vtg(ubyte col, ubyte row) {
-      vtui.gotoxy(col, row)
-    }
-
-    sub init_canvas() {
-      vtui.initialize()
-      vtui.screen_set(0)
-      vtui.clr_scr(' ', $50)
-      vtg(main.LEFT_MARGIN-1,main.TOP_LINE-1)
-      vtui.fill_box(' ', main.RIGHT_MARGIN, main.HEIGHT, $c6)
-      vtg(main.LEFT_MARGIN-1,main.TOP_LINE-1)
-      vtui.border(1, RIGHT_MARGIN+1, HEIGHT+1, $00)
-    }
 
     ubyte    nngN  = 0        ; NN SHIFT+g counter
     ubyte[2] numb  = [0] * 2  ; digit for "NN SHIFT+g"
@@ -159,7 +144,6 @@ main {
 ; TODO need one that handles <number><number><number>+SHIFT+G
 
     sub start() {
-      init_canvas()
       ubyte char = 0 
       txt.clear_screen();
       txt.iso()
@@ -228,55 +212,28 @@ main {
         $3a -> {       ; ':',  mode
           if main.MODE == main.NAV {
             main.MODE = main.COMMAND
-            cursor.command_prompt()
-            ubyte cmdchar  = $60
-            ubyte cmdi     = 0
-           CMDCHARLOOP:
-              void, cmdchar = cbm.GETIN()
-              when cmdchar {
-                $1b -> {
-                  txt.plot(main.LEFT_MARGIN,main.TOP_LINE)
-                  cursor.update_tracker()
-                  goto NAVCHARLOOP
-                }
-                $0d -> { ; <ENTER> ... dispatch commands  here
-                  txt.plot(main.LEFT_MARGIN,main.TOP_LINE)
-                  when main.cmdBuffer[0] {
-                    'e' -> {
-                      txt.plot(1, main.FOOTER_LINE)
-                      txt.print(main.blankLine)
-                      txt.plot(1, main.FOOTER_LINE)
-                      str fn1 = " " * main.CMDBUFFER_SIZE 
-                      ; parse out file name (everything after ":e")
-                      string.slice(main.cmdBuffer, 2, string.length(main.cmdBuffer), fn1)
-                      string.strip(fn1)
-                      load_file(fn1, CURRENT_BANK)
-                    }
-                    'q' -> {
-                      txt.iso_off()
-                      sys.exit(0)
-                    }
-                  }
-                  sys.wait(10)
-                  cursor.update_tracker()
-                  goto NAVCHARLOOP ; go back to main navloop
-                }
-                else -> {
-                  if cmdchar >= $20 and cmdchar <= $7f  {
-                    ;; TODO - figure out how handle backspace in the CMD window???
-                    if cmdchar == $7f or cmdchar == $08 {
-                      cmdi--
-                    }
-                    else {
-                      main.cmdBuffer[cmdi] = cmdchar ;; .. !! NEXT - need to figure out this assignment
-                      cmdi++
-                    }
-                    cbm.CHROUT(cmdchar)
-                  }
-                }
+            cursor.command_prompt() ; blocking until <ENTER> is pressed?
+            txt.plot(1, main.FOOTER_LINE)
+            txt.print(main.blankLine)
+            txt.plot(1, main.FOOTER_LINE)
+            ; parse out file name (everything after ":N")
+            str fn1 = " " * main.CMDBUFFER_SIZE
+            string.slice(main.cmdBuffer, 2, string.length(main.cmdBuffer), fn1)
+            string.strip(fn1)
+            when main.cmdBuffer[0] {
+              'e' -> {
+                load_file(fn1, CURRENT_BANK)
               }
-              goto CMDCHARLOOP
+              'w' -> {
+                save_file(CURRENT_BANK, fn1)
+              }
+              'q' -> {
+                txt.iso_off()
+                sys.exit(0)
+              }
+            }
           }
+          main.MODE = main.NAV
         }
         'h',$9d -> {       ; $68, LEFT 
           cursor_left_on_h()
@@ -344,6 +301,26 @@ main {
       if c+1 <= main.RIGHT_MARGIN { ;; enforce RHS bounds
         cursor.place_cursor(c+1,r)  ;; move actual cursor
         cursor.update_tracker()
+      }
+    }
+
+    sub save_file(ubyte BANK, str filepath) {
+      ubyte i, j
+      uword REC_START, line
+      for line in 0 to DOC_LENGTH-1 {
+        j = 0
+        for i in 0 to main.DATSZ-1 {
+           main.printBuffer[j] = 00 
+           j += 1
+        }
+        j = 0
+        REC_START = main.BASE_PTR + (main.RECSZ * line)
+        for i in 0 to main.DATSZ-1 {
+           main.printBuffer[j] = @(REC_START + main.PTRSZ + i)
+           j += 1
+        }
+;; write to file here ...
+        ;print_line(line)
       }
     }
 

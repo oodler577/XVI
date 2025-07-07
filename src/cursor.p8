@@ -54,10 +54,25 @@ cursor {
      }
 
      sub command_prompt () {
+        ubyte cmdchar
         txt.plot(0, main.FOOTER_LINE) ; move cursor to the starting position for writing
         txt.print(main.blankLine)
         txt.plot(0, main.FOOTER_LINE)
         txt.print(": ")
+        CMDINPUT:
+          void, cmdchar = cbm.GETIN()
+          if cmdchar != $0d { ; any character now but <ENTER>
+            cbm.CHROUT(cmdchar)
+          }
+          else {
+            ; reads in the command and puts it into main.cmdBuffer for additional
+            ; processing in the main code
+            ubyte i
+            for i in 0 to string.length(main.cmdBuffer) - 1 { 
+              main.cmdBuffer[i] = txt.getchr(2+i, main.FOOTER_LINE)
+            }
+            return;
+          } 
+        goto CMDINPUT
      }
-
 }
