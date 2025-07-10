@@ -180,7 +180,7 @@ main {
           ubyte petchar = vtui.scr2pet(char)      ; convert screen code to petscii, for writing to file
           diskio.f_write(&petchar, 1)             ; write to file (using reference to "petchar")
         }
-       diskio.f_write("\x0a", 1)
+       diskio.f_write("\x0d", 1)
       }
       diskio.f_close_w()
       vtg(main.minCol-1,main.maxLine+1);

@@ -211,6 +211,8 @@ main {
         }
         $3a -> {       ; ':',  mode
           if main.MODE == main.NAV {
+            ubyte c = txt.get_column() ; get current
+            r = txt.get_row()
             main.MODE = main.COMMAND
             cursor.command_prompt() ; blocking until <ENTER> is pressed?
             txt.plot(1, main.FOOTER_LINE)
@@ -233,6 +235,8 @@ main {
               }
             }
           }
+          cursor.place_cursor(c,r)      ;; move actual cursor
+          cursor.update_tracker()
           main.MODE = main.NAV
         }
         'h',$9d -> {       ; $68, LEFT 
@@ -305,23 +309,24 @@ main {
     }
 
     sub save_file(ubyte BANK, str filepath) {
-      ubyte i, j
+      ubyte i
+      ubyte ub
       uword REC_START, line
+      diskio.f_open_w_seek(filepath)              ; open file for writing
       for line in 0 to DOC_LENGTH-1 {
-        j = 0
         for i in 0 to main.DATSZ-1 {
-           main.printBuffer[j] = 00 
-           j += 1
+           main.printBuffer[i] = 00 
         }
-        j = 0
         REC_START = main.BASE_PTR + (main.RECSZ * line)
-        for i in 0 to main.DATSZ-1 {
-           main.printBuffer[j] = @(REC_START + main.PTRSZ + i)
-           j += 1
+        for i in 0 to main.DATSZ-2 {
+           ub = @(REC_START + main.PTRSZ + i)
+           if ub >= 32 and ub <= 126 {
+             diskio.f_write(&ub, 1)
+           }
         }
-;; write to file here ...
-        ;print_line(line)
+        diskio.f_write("\n", 1)
       }
+      diskio.f_close_w()
     }
 
     sub load_file(str filepath, ubyte BANK) {
