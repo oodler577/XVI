@@ -48,9 +48,9 @@ main {
 
     ; defined mode constants
     const ubyte NAV           = 1 ; modal state for navigation, default state
-    const ubyte EDI           = 2 ; modal state for insert mode, triggered with ctrl-i
+    const ubyte INSERT        = 2 ; modal state for insert mode, triggered with ctrl-i
     const ubyte REPLACE       = 3 ; modal state for replacement mode, triggered with ctrl-r
-    const ubyte COMMAND       = 3 ; modal state for entering a 
+    const ubyte COMMAND       = 4 ; modal state for entering a 
 
     ; current mode
     ubyte MODE                = NAV ; set initial state to navigation
@@ -103,7 +103,7 @@ main {
       }
 
       ;; NEXT_LINE is in current view, so just jump cursor to that line; no re-rendering or reassigning FIRST_LINE_IDX
-      if LINE_IDX >= main.FIRST_LINE_IDX and LINE_IDX <= main.HEIGHT {
+      if LINE_IDX >= main.FIRST_LINE_IDX and LINE_IDX < main.HEIGHT {
         cursor.update_tracker()
         cursor.place_cursor(main.LEFT_MARGIN, LINE_IDX+main.TOP_LINE-main.FIRST_LINE_IDX as ubyte) ; place cursor where the text ends
       }
@@ -222,6 +222,8 @@ main {
             str fn1 = " " * main.CMDBUFFER_SIZE
             string.slice(main.cmdBuffer, 2, string.length(main.cmdBuffer), fn1)
             string.strip(fn1)
+
+            ; check for single letter commands
             when main.cmdBuffer[0] {
               'e' -> {
                 load_file(fn1, CURRENT_BANK)
@@ -233,6 +235,16 @@ main {
                 txt.iso_off()
                 sys.exit(0)
               }
+            }
+            ; longer commands, like 'set nonumber'
+            str fn0 = " " * main.CMDBUFFER_SIZE
+            fn0 = main.cmdBuffer
+            string.strip(fn0)
+            if fn0 == "set number" {
+; redraw with line numbers
+            }
+            else if fn0 == "set nonumber" {
+; redraw without line numbers
             }
           }
           cursor.place_cursor(c,r)      ;; move actual cursor
