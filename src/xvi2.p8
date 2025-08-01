@@ -240,6 +240,10 @@ main {
             string.slice(main.cmdBuffer, 2, string.length(main.cmdBuffer), fn1)
             string.strip(fn1)
 
+            str fn0 = " " * main.CMDBUFFER_SIZE
+            fn0 = main.cmdBuffer
+            string.strip(fn0)
+
             ; check for single letter commands
             when main.cmdBuffer[0] {
               'e' -> {
@@ -252,11 +256,27 @@ main {
                 txt.iso_off()
                 sys.exit(0)
               }
+              '%' -> {
+                 ; filter dispatch to "external" commands
+; TODO: offer "current line" handlers for the same commands as %
+                 when main.cmdBuffer[1] {
+                   's' -> { ; lead to s///g
+
+                   }
+                   '!' -> { ; e.g., "fmt -w 80" - wraps all lines to 80 colums
+
+                   }
+                   '/' -> { ; lead to search downward
+
+                   }
+                   '?' -> { ; lead to search upward 
+
+                   }
+                }
+              }
+              ;
             }
             ; longer commands, like 'set nonumber'
-            str fn0 = " " * main.CMDBUFFER_SIZE
-            fn0 = main.cmdBuffer
-            string.strip(fn0)
             if fn0 == "set number" {
               ; redraw with line numbers
               main.shownumbers = 1 
