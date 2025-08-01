@@ -5,6 +5,7 @@
 %import diskio
 %import blocks
 %import cursor
+%import verafx
 %option no_sysinit
 %zeropage basicsafe
 %encoding iso
@@ -17,6 +18,7 @@ main {
     const ubyte CMDBUFFER_SIZE = 50
     str cmdBuffer            = " " * CMDBUFFER_SIZE
     str currFilename         = " " * 128   ; for defining the path of the file to open
+    ubyte shownumbers        = 0
 
     const uword PTRSZ        = 2 ; in Bytes
     const uword RECSZ        = PTRSZ + DATSZ + PTRSZ 
@@ -58,6 +60,22 @@ main {
     ubyte    nngN  = 0        ; NN SHIFT+g counter
     ubyte[2] numb  = [0] * 2  ; digit for "NN SHIFT+g"
     uword    tmpline
+
+    ; from https://github.com/irmen/cx16shell/blob/master/src/shell.p8
+    ubyte[5] text_colors = [1, 6, 3, 13, 10]
+    const ubyte TXT_COLOR_NORMAL = 0
+    const ubyte TXT_COLOR_BACKGROUND = 1
+    const ubyte TXT_COLOR_HIGHLIGHT = 2
+    const ubyte TXT_COLOR_HIGHLIGHT_PROMPT = 3
+    const ubyte TXT_COLOR_ERROR = 4
+
+    ; from https://github.com/irmen/cx16shell/blob/master/src/shell.p8
+    sub init_screen() {
+        txt.color2(text_colors[TXT_COLOR_NORMAL], text_colors[TXT_COLOR_BACKGROUND])
+        cx16.VERA_DC_BORDER = text_colors[TXT_COLOR_BACKGROUND]
+        txt.iso()
+        txt.clear_screen()
+    }
 
     ; jumps to the very end of the document
     sub cursor_down_on_G () {
@@ -145,9 +163,8 @@ main {
 
     sub start() {
       ubyte char = 0 
-      txt.clear_screen();
-      txt.iso()
-      load_file("samples/sample6.txt", CURRENT_BANK) 
+      init_screen()
+      load_file("sample6.txt", CURRENT_BANK) 
      NAVCHARLOOP:
       void, char = cbm.GETIN()
       ; catch leading numbers for "NN SHIFT+g"
@@ -241,10 +258,21 @@ main {
             fn0 = main.cmdBuffer
             string.strip(fn0)
             if fn0 == "set number" {
-; redraw with line numbers
+              ; redraw with line numbers
+              main.shownumbers = 1 
+              txt.plot(main.LEFT_MARGIN,main.TOP_LINE) ; position for full screen redraw
+              blocks.draw_range(CURRENT_BANK, main.FIRST_LINE_IDX, main.FIRST_LINE_IDX+main.HEIGHT-1) ; full screen redraw
+              cursor.place_cursor(c,r)           ;; move actual cursor
+              cursor.update_tracker()
             }
             else if fn0 == "set nonumber" {
-; redraw without line numbers
+              ; redraw without line numbers
+              ; redraw without line numbers
+              main.shownumbers = 0
+              txt.plot(main.LEFT_MARGIN,main.TOP_LINE) ; position for full screen redraw
+              blocks.draw_range(CURRENT_BANK, main.FIRST_LINE_IDX, main.FIRST_LINE_IDX+main.HEIGHT-1) ; full screen redraw
+              cursor.place_cursor(c,r)           ;; move actual cursor
+              cursor.update_tracker()
             }
           }
           cursor.place_cursor(c,r)      ;; move actual cursor
@@ -277,7 +305,6 @@ main {
       }
       else if (main.FIRST_LINE_IDX + main.HEIGHT < main.DOC_LENGTH) {
         main.FIRST_LINE_IDX += 1
-        ;txt.clear_screen()
         txt.plot(main.LEFT_MARGIN,main.TOP_LINE) ; position for full screen redraw
         blocks.draw_range(CURRENT_BANK, main.FIRST_LINE_IDX, main.FIRST_LINE_IDX+main.HEIGHT-1) ; full screen redraw
         cursor.place_cursor(c,r)           ;; move actual cursor

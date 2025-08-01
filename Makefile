@@ -30,6 +30,10 @@ iso-test:
 xvi2:
 	java -jar /Users/tempuser/Desktop/x16/prog8c-10.5.1-all.jar -target cx16 src/xvi2.p8
 
+sendtox16:
+	cp xvi2.prg xvi2
+	curl -F "file=@xvi2" http://192.168.0.1/upload.cgi > /dev/null
+
 run2:
 	x16emu -scale 2 -prg ./xvi2.prg -run
 
