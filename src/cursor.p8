@@ -68,7 +68,7 @@ cursor {
             ; reads in the command and puts it into main.cmdBuffer for additional
             ; processing in the main code
             ubyte i
-            for i in 0 to string.length(main.cmdBuffer) - 1 { 
+            for i in 0 to strings.length(main.cmdBuffer) - 1 { 
               main.cmdBuffer[i] = txt.getchr(2+i, main.FOOTER_LINE)
             }
             return;

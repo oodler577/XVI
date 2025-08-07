@@ -1,5 +1,5 @@
 %import textio
-%import string
+%import strings
 %import conv
 %import syslib
 %import diskio
@@ -11,32 +11,27 @@
 %encoding iso
 
 main {
-    const uword DATSZ        = 76
-    str blankLine            = " " * 79 
-    str printBuffer          = " " * DATSZ 
-    str lineBuffer           = " " * DATSZ 
+    const uword DATASZ       = 78
+    str blankLine            = " " * 79
+    str printBuffer          = " " * DATASZ
+    str lineBuffer           = " " * DATASZ
+    str currFilename         = " " * 128    ; for defining the path of the file to open
+    ubyte shownumbers        = 0
     const ubyte CMDBUFFER_SIZE = 50
     str cmdBuffer            = " " * CMDBUFFER_SIZE
-    str currFilename         = " " * 128   ; for defining the path of the file to open
-    ubyte shownumbers        = 0
 
-    const uword PTRSZ        = 2 ; in Bytes
-    const uword RECSZ        = PTRSZ + DATSZ + PTRSZ 
+    const uword METASZ       = 3
+    const uword RECSZ        = METASZ + DATASZ + METASZ
+    uword REC_PTR            = 0
 
     ; video and buffer base addresses
     const ubyte CURRENT_BANK = 1
     const uword BASE_PTR     = $A000 ; assumed beginning of CURRENT_BANK
-    const uword VERA_ADDR_L  = $9F20
-    const uword VERA_ADDR_M  = $9F21
-    const uword VERA_ADDR_H  = $9F22
-    const uword VERA_DATA0   = $9F23
-    const uword VERA_DATA1   = $9F24
-    const uword VERA_CTRL    = $9F25
 
     ; view port dimensions
     const ubyte TOP_LINE     = 1
-    const ubyte LEFT_MARGIN  = 3
-    const ubyte RIGHT_MARGIN = 78
+    const ubyte LEFT_MARGIN  = 1
+    const ubyte RIGHT_MARGIN = 79
     const ubyte HEIGHT       = 56
     const ubyte MIDDLE_LINE  = 27
     const ubyte BOTTOM_LINE  = 57
@@ -56,7 +51,6 @@ main {
 
     ; current mode
     ubyte MODE                = NAV ; set initial state to navigation
-
     ubyte    nngN  = 0        ; NN SHIFT+g counter
     ubyte[2] numb  = [0] * 2  ; digit for "NN SHIFT+g"
     uword    tmpline
@@ -237,12 +231,12 @@ main {
             txt.plot(1, main.FOOTER_LINE)
             ; parse out file name (everything after ":N")
             str fn1 = " " * main.CMDBUFFER_SIZE
-            string.slice(main.cmdBuffer, 2, string.length(main.cmdBuffer), fn1)
-            string.strip(fn1)
+            strings.slice(main.cmdBuffer, 2, strings.length(main.cmdBuffer), fn1)
+            strings.strip(fn1)
 
             str fn0 = " " * main.CMDBUFFER_SIZE
             fn0 = main.cmdBuffer
-            string.strip(fn0)
+            strings.strip(fn0)
 
             ; check for single letter commands
             when main.cmdBuffer[0] {
@@ -286,7 +280,6 @@ main {
               cursor.update_tracker()
             }
             else if fn0 == "set nonumber" {
-              ; redraw without line numbers
               ; redraw without line numbers
               main.shownumbers = 0
               txt.plot(main.LEFT_MARGIN,main.TOP_LINE) ; position for full screen redraw
@@ -370,15 +363,15 @@ main {
     sub save_file(ubyte BANK, str filepath) {
       ubyte i
       ubyte ub
-      uword REC_START, line
+      uword line
       diskio.f_open_w_seek(filepath)              ; open file for writing
       for line in 0 to DOC_LENGTH-1 {
-        for i in 0 to main.DATSZ-1 {
+        for i in 0 to main.DATASZ-1 {
            main.printBuffer[i] = 00 
         }
-        REC_START = main.BASE_PTR + (main.RECSZ * line)
-        for i in 0 to main.DATSZ-2 {
-           ub = @(REC_START + main.PTRSZ + i)
+        main.REC_PTR = main.BASE_PTR + (main.RECSZ * line)
+        for i in 0 to main.DATASZ-2 {
+           ub = @(main.REC_PTR + main.METASZ + i)
            if ub >= 32 and ub <= 126 {
              diskio.f_write(&ub, 1)
            }
@@ -396,8 +389,8 @@ main {
           main.currFilename = filepath
           while cbm.READST() == 0 {
             ;; reset these buffers
-            lineBuffer  = " " * DATSZ
-            printBuffer = " " * DATSZ 
+            lineBuffer  = " " * DATASZ
+            printBuffer = " " * DATASZ 
             ; read line
             ubyte length
             length, void = diskio.f_readline(lineBuffer)

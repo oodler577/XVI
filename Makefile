@@ -1,7 +1,7 @@
 all: clean build bundle run
 
 build:
-	java -jar /Users/tempuser/Desktop/x16/prog8c-10.5.1-all.jar -target cx16 src/xvi.p8
+	java -jar /Users/tempuser/Desktop/x16/prog8c-11.4.1-all.jar -target cx16 src/xvi.p8
 
 bundle:
 	rm -rfv ./XVI
@@ -22,13 +22,13 @@ trace:
 	x16emu -scale 2 -prg ./XVI -run -trace
 
 io-test:
-	java -jar /Users/tempuser/Desktop/x16/prog8c-10.5.1-all.jar -target cx16 src/file-io-test.p8
+	java -jar /Users/tempuser/Desktop/x16/prog8c-11.4.1-all.jar -target cx16 src/file-io-test.p8
 
 iso-test:
-	java -jar /Users/tempuser/Desktop/x16/prog8c-10.5.1-all.jar -target cx16 src/iso-test.p8
+	java -jar /Users/tempuser/Desktop/x16/prog8c-11.4.1-all.jar -target cx16 src/iso-test.p8
 
 xvi2:
-	java -jar /Users/tempuser/Desktop/x16/prog8c-10.5.1-all.jar -target cx16 src/xvi2.p8
+	java -jar /Users/tempuser/Desktop/x16/prog8c-11.4.1-all.jar -target cx16 src/xvi2.p8
 
 sendtox16:
 	cp xvi2.prg xvi2
@@ -44,7 +44,7 @@ run-xvi2-no-scale:
 	x16emu -prg ./xvi2.prg -run -debug
 
 debug:
-	x16emu -scale 2 -prg ./XVI -run -debug
+	x16emu -scale 2 -prg ./xvi2.prg -run -debug
 
 clean:
 	rm -fv xvi xvi.prg *.asm 2> /dev/null || echo -n
