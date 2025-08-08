@@ -56,17 +56,8 @@ main {
     uword    tmpline
 
     ; from https://github.com/irmen/cx16shell/blob/master/src/shell.p8
-    ubyte[5] text_colors = [1, 6, 3, 13, 10]
-    const ubyte TXT_COLOR_NORMAL = 0
-    const ubyte TXT_COLOR_BACKGROUND = 1
-    const ubyte TXT_COLOR_HIGHLIGHT = 2
-    const ubyte TXT_COLOR_HIGHLIGHT_PROMPT = 3
-    const ubyte TXT_COLOR_ERROR = 4
-
-    ; from https://github.com/irmen/cx16shell/blob/master/src/shell.p8
     sub init_screen() {
-        txt.color2(text_colors[TXT_COLOR_NORMAL], text_colors[TXT_COLOR_BACKGROUND])
-        cx16.VERA_DC_BORDER = text_colors[TXT_COLOR_BACKGROUND]
+        txt.color2(5,0)
         txt.iso()
         txt.clear_screen()
     }

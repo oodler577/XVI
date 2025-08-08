@@ -3,12 +3,12 @@
 ;
 
 blocks {
-  ; +----------+----------------------------------------------+----------+
-  ; | PREV_PTR |                 DATA - LINE TEXT             | NEXT_PTR |
-  ; | main.METASZ Bytes  |              main.DATASZ Bytes               | main.METASZ Bytes  |
-  ; +----------+----------------------------------------------+----------+
+  ; +----------+----------------------------------------------+------------------------------+
+  ; | PREV_PTR           |                 DATA - LINE TEXT             | NEXT_PTR           |
+  ; | main.METASZ Bytes  |    main.DATASZ Bytes                         | main.METASZ Bytes  |
+  ; +----------+----------------------------------------------+------------------------------+
   ; ^
-  ; |-- $A000+main.RECSZ*recNo
+  ; |-- main.BASE_PTR+main.RECSZ*recNo
 
 ; TODO - store bank in header?
 
@@ -17,11 +17,11 @@ blocks {
   ;; writes line to memory
   sub poke_line_data (ubyte bank, uword line) {
     ; compute addresses - assuming before/after addresses is only valid on first
-    uword curr_PTR = $A000 + (main.RECSZ * line)        ; start addr of current line
-    uword prev_PTR = $A000 + (main.RECSZ * (line - 1))  ; start addr of prev line
-    uword next_PTR = $A000 + (main.RECSZ * (line + 1))  ; start addr of next line
+    uword curr_PTR = main.BASE_PTR + (main.RECSZ * line)        ; start addr of current line
+    uword prev_PTR = main.BASE_PTR + (main.RECSZ * (line - 1))  ; start addr of prev line
+    uword next_PTR = main.BASE_PTR + (main.RECSZ * (line + 1))  ; start addr of next line
     if line < 1 {
-      prev_PTR = $A000
+      prev_PTR = main.BASE_PTR
     }
     ; write PREV_PTR section
     poke(curr_PTR, bank)
@@ -41,7 +41,7 @@ blocks {
   sub draw_range (ubyte bank, uword startIndex, uword endIndex) {
     ubyte j
     uword line
-    uword curr_PTR = $A000 + (main.RECSZ * startIndex)
+    uword curr_PTR = main.BASE_PTR + (main.RECSZ * startIndex)
     for line in startIndex to endIndex {
       j = 0
       for i in 0 to main.DATASZ-1 {
@@ -77,7 +77,7 @@ blocks {
 
   sub clear_bank () {
     uword A;
-    for A in $A000 to $BFFF {
+    for A in main.BASE_PTR to $BFFF {
       @(A) = 0 ; poke 0 to memory address
         A += 1 ; increment memory address by 1
     }
