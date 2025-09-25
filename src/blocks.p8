@@ -59,6 +59,22 @@ blocks {
     txt.plot(main.LEFT_MARGIN, txt.get_row() - 1)
   }
 
+  ; by-passes line by moving "next" point from previous line to point
+  ; to the next line (of current line) - if possible, add an "undo" here
+  sub cut_line() {
+    ; point prev "next" to current "next"
+    ; have status indicator of what just happened
+    ; save for undo
+    ; keep line in buffer for paste
+    ; figure out opportunities to compact memory space (save to tmp and reload?)
+    ; implement basic .swp and auto save?
+    txt.plot(main.LEFT_MARGIN, txt.get_row())
+  }
+
+  sub yank_line() {
+    txt.plot(main.LEFT_MARGIN, txt.get_row())
+  }
+
   sub print_line (uword line) {
     ; start printing at main.LEFT_MARGIN, keep row the same
     txt.plot(0, txt.get_row())

@@ -211,6 +211,44 @@ main {
           cursor.update_tracker()
           main.MODE = main.NAV
         }
+        'y' -> {       ; Accept "yy"
+          ubyte charY = 0 
+        YYLOOP:
+          void, charY = cbm.GETIN()
+          when charY {
+            'y' -> {
+;; implement yank of current line ...
+               blocks.yank_line(); ;; implement !!!!!!!!!!!!!!
+               goto NAVCHARLOOP
+             }
+             $1b -> {       ; ESC key, throw into NAV mode from any other mode
+               goto NAVCHARLOOP
+             }
+             else -> {
+               goto YYLOOP
+             }
+          }
+          goto YYLOOP
+        }
+        'd' -> {       ; Accept "dd"
+          ubyte charD  = 0 
+        DDLOOP:
+          void, charD = cbm.GETIN()
+          when charD {
+            'd' -> {
+                blocks.cut_line(); ;; implement !!!!!!!!!!!!!! 
+                goto NAVCHARLOOP
+                sys.exit(0)
+             }
+             $1b -> {       ; ESC key, throw into NAV mode from any other mode
+               goto NAVCHARLOOP
+             }
+             else -> {
+               goto DDLOOP
+             }
+          }
+          goto DDLOOP
+        }
         $3a -> {       ; ':',  mode
           if main.MODE == main.NAV {
             ubyte c = txt.get_column() ; get current
