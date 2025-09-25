@@ -236,9 +236,11 @@ main {
           void, charD = cbm.GETIN()
           when charD {
             'd' -> {
-                blocks.cut_line(); ;; implement !!!!!!!!!!!!!! 
+                ; get line index of visible screen that will be
+                ; deleted; it is the line the that cursor is on.
+                uword REMOVE_LINE_IDX = mkword($00, txt.get_row())
+                blocks.cut_line(CURRENT_BANK, REMOVE_LINE_IDX)
                 goto NAVCHARLOOP
-                sys.exit(0)
              }
              $1b -> {       ; ESC key, throw into NAV mode from any other mode
                goto NAVCHARLOOP

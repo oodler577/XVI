@@ -38,6 +38,35 @@ blocks {
     curr_PTR = next_PTR
   }
 
+  ; by-passes line by moving "next" point from previous line to point
+  ; to the next line (of current line) - if possible, add an "undo" here
+  sub cut_line(ubyte bank, uword LINE_IDX) {
+    ; point prev "next" to current "next"
+    uword curr_PTR = main.BASE_PTR + (main.RECSZ * LINE_IDX)
+    if LINE_IDX == main.TOP_LINE {         ; case 0
+      ; line being removed is the very first line on screen, has no previous line record
+; swap pointers accordingly
+    }
+    else if LINE_IDX == main.BOTTOM_LINE { ; case 2
+      ; line being removed is the very last line of the document, has no next line record
+; swap pointers accordingly
+    }
+    else {                                 ; case 3
+      ; all lines between first and last line
+; swap pointers accordingly
+    }
+; now, redraw visible - being sure to adjust the first line up if case 0
+    ; have status indicator of what just happened
+    ; save for undo
+    ; keep line in buffer for paste
+    ; figure out opportunities to compact memory space (save to tmp and reload?)
+    ; implement basic .swp and auto save?
+  }
+
+  sub yank_line() {
+    txt.plot(main.LEFT_MARGIN, txt.get_row())
+  }
+
   sub draw_range (ubyte bank, uword startIndex, uword endIndex) {
     ubyte j
     uword line
@@ -57,22 +86,6 @@ blocks {
       curr_PTR = peekw(curr_PTR + main.METASZ + main.DATASZ + 1)
     }
     txt.plot(main.LEFT_MARGIN, txt.get_row() - 1)
-  }
-
-  ; by-passes line by moving "next" point from previous line to point
-  ; to the next line (of current line) - if possible, add an "undo" here
-  sub cut_line() {
-    ; point prev "next" to current "next"
-    ; have status indicator of what just happened
-    ; save for undo
-    ; keep line in buffer for paste
-    ; figure out opportunities to compact memory space (save to tmp and reload?)
-    ; implement basic .swp and auto save?
-    txt.plot(main.LEFT_MARGIN, txt.get_row())
-  }
-
-  sub yank_line() {
-    txt.plot(main.LEFT_MARGIN, txt.get_row())
   }
 
   sub print_line (uword line) {
