@@ -39,7 +39,7 @@ run2:
 	x16emu -scale 2 -prg ./dist/xvi2 -run
 
 run2demo:
-	x16emu -scale 2 -prg ./xvi2.prg -run -gif demo.gif
+	x16emu -scale 2 -prg ./dist/xvi2 -run -gif demo.gif
 
 run-xvi2-no-scale:
 	x16emu -prg ./xvi2.prg -run -debug

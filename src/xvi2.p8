@@ -29,28 +29,28 @@ main {
     const uword BASE_PTR     = $A000 ; assumed beginning of CURRENT_BANK
 
     ; view port dimensions
-    const ubyte TOP_LINE     = 1
+    const ubyte TOP_LINE     = 1  ; row+1 of the first line of the document (FIRST_LINE_IDX)
     const ubyte LEFT_MARGIN  = 1
     const ubyte RIGHT_MARGIN = 79
     const ubyte HEIGHT       = 56
     const ubyte MIDDLE_LINE  = 27
-    const ubyte BOTTOM_LINE  = 57
+    const ubyte BOTTOM_LINE  = 57 ; row+1 of the last line of the view port (LAST_LINE_IDX)
     const ubyte FOOTER_LINE  = 58
 
     ; define segment of the document buffer that is currently visible via
     ; the view port (TEXTBOX)
-    uword DOC_LENGTH          = 0
-    uword FIRST_LINE_IDX      = 0 ; buffer index of the line that is shown at the top of the TEXTBOX (view port)
-    uword LAST_LINE_IDX           ; buffer index of the line that is show at the bottom of the TEXTBOX 
+    uword DOC_LENGTH         = 0
+    uword FIRST_LINE_IDX     = 0 ; buffer index of the line that is shown at the top of the TEXTBOX (view port)
+    uword LAST_LINE_IDX          ; buffer index of the line that is show at the bottom of the TEXTBOX 
 
     ; defined mode constants
-    const ubyte NAV           = 1 ; modal state for navigation, default state
-    const ubyte INSERT        = 2 ; modal state for insert mode, triggered with ctrl-i
-    const ubyte REPLACE       = 3 ; modal state for replacement mode, triggered with ctrl-r
-    const ubyte COMMAND       = 4 ; modal state for entering a 
+    const ubyte NAV          = 1 ; modal state for navigation, default state
+    const ubyte INSERT       = 2 ; modal state for insert mode, triggered with ctrl-i
+    const ubyte REPLACE      = 3 ; modal state for replacement mode, triggered with ctrl-r
+    const ubyte COMMAND      = 4 ; modal state for entering a 
 
     ; current mode
-    ubyte MODE                = NAV ; set initial state to navigation
+    ubyte MODE               = NAV ; set initial state to navigation
     ubyte    nngN  = 0        ; NN SHIFT+g counter
     ubyte[2] numb  = [0] * 2  ; digit for "NN SHIFT+g"
     uword    tmpline
@@ -238,8 +238,10 @@ main {
             'd' -> {
                 ; get line index of visible screen that will be
                 ; deleted; it is the line the that cursor is on.
-                uword REMOVE_LINE_IDX = mkword($00, txt.get_row())
-                blocks.cut_line(CURRENT_BANK, REMOVE_LINE_IDX)
+                uword CUT_LINE = blocks.row2line(txt.get_row())
+                blocks.cut_line(CURRENT_BANK, CUT_LINE)
+; 'full screen redraw' needs a simplified function
+                blocks.draw_range(CURRENT_BANK, main.FIRST_LINE_IDX, main.FIRST_LINE_IDX+main.HEIGHT-1) ; full screen redraw
                 goto NAVCHARLOOP
              }
              $1b -> {       ; ESC key, throw into NAV mode from any other mode

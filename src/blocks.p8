@@ -17,8 +17,8 @@ blocks {
   ;; writes line to memory
   sub poke_line_data (ubyte bank, uword line) {
     ; compute addresses - assuming before/after addresses is only valid on first
-    uword curr_PTR = main.BASE_PTR + (main.RECSZ * line)        ; start addr of current line
     uword prev_PTR = main.BASE_PTR + (main.RECSZ * (line - 1))  ; start addr of prev line
+    uword curr_PTR = main.BASE_PTR + (main.RECSZ * line)        ; start addr of current line
     uword next_PTR = main.BASE_PTR + (main.RECSZ * (line + 1))  ; start addr of next line
     if line < 1 {
       prev_PTR = main.BASE_PTR
@@ -26,7 +26,7 @@ blocks {
     ; write PREV_PTR section
     poke(curr_PTR, bank)
     pokew(curr_PTR+1, prev_PTR)
-    ; write NEXT_PTR section
+    ; write next_PTR section
     poke(curr_PTR + main.METASZ + main.DATASZ, bank)
     pokew(curr_PTR + main.METASZ + main.DATASZ + 1, next_PTR)
     ; add DATA
@@ -38,29 +38,41 @@ blocks {
     curr_PTR = next_PTR
   }
 
+  sub row2line(ubyte row) -> uword {
+    ; both row and FIRST_LINE_IDX are zero-based, so they can
+    ; be used directly here to compute the buffer index of the
+    ; file as it is in memory
+    uword line = mkword($00, row) - main.FIRST_LINE_IDX + 1
+    return line
+  }
+
   ; by-passes line by moving "next" point from previous line to point
   ; to the next line (of current line) - if possible, add an "undo" here
-  sub cut_line(ubyte bank, uword LINE_IDX) {
+  sub cut_line(ubyte bank, uword line) {
+    uword prev_PTR = main.BASE_PTR + (main.RECSZ * (line - 1))  ; start addr of prev line
+    uword curr_PTR = main.BASE_PTR + (main.RECSZ * line)        ; start addr of current line
+    uword next_PTR = main.BASE_PTR + (main.RECSZ * (line + 1))  ; start addr of next line
     ; point prev "next" to current "next"
-    uword curr_PTR = main.BASE_PTR + (main.RECSZ * LINE_IDX)
-    if LINE_IDX == main.TOP_LINE {         ; case 0
-      ; line being removed is the very first line on screen, has no previous line record
-; swap pointers accordingly
-    }
-    else if LINE_IDX == main.BOTTOM_LINE { ; case 2
-      ; line being removed is the very last line of the document, has no next line record
-; swap pointers accordingly
-    }
-    else {                                 ; case 3
+    ; case 0
+       ; line being removed is the very first line on screen, has no previous line record
+       ; swap pointers accordingly
+    ; case 1
+       ; line being removed is the very last line of the document, has no next line record
+       ; swap pointers accordingly
+    ; case 2
       ; all lines between first and last line
-; swap pointers accordingly
-    }
-; now, redraw visible - being sure to adjust the first line up if case 0
-    ; have status indicator of what just happened
-    ; save for undo
-    ; keep line in buffer for paste
-    ; figure out opportunities to compact memory space (save to tmp and reload?)
-    ; implement basic .swp and auto save?
+
+    ; set bank of prev_PTR's footer "bank" ubyte 
+    poke(prev_PTR+main.METASZ+main.DATASZ, bank)
+    ; set next_PRT of prev_PTR's footer "next_PTR" uword 
+    pokew(prev_PTR+main.METASZ+main.DATASZ+1, next_PTR)
+
+; we should save current record data in clip board for pasting
+
+    ; set bank of next_PTR's footer "bank" ubyte 
+    poke(next_PTR, bank)
+    ; set next_PRT of next_PTR's footer "prev_PTR" uword 
+    pokew(next_PTR+1, next_PTR)
   }
 
   sub yank_line() {
