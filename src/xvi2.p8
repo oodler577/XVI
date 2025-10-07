@@ -149,7 +149,7 @@ main {
     sub start() {
       ubyte char = 0 
       init_screen()
-      load_file("sample6.txt", CURRENT_BANK) 
+      load_file(CURRENT_BANK, "sample6.txt") 
      NAVCHARLOOP:
       void, char = cbm.GETIN()
       ; catch leading numbers for "NN SHIFT+g"
@@ -238,10 +238,12 @@ main {
             'd' -> {
                 ; get line index of visible screen that will be
                 ; deleted; it is the line the that cursor is on.
-                uword CUT_LINE = blocks.row2line(txt.get_row())
-                blocks.cut_line(CURRENT_BANK, CUT_LINE)
-; 'full screen redraw' needs a simplified function
-                blocks.draw_range(CURRENT_BANK, main.FIRST_LINE_IDX, main.FIRST_LINE_IDX+main.HEIGHT-1) ; full screen redraw
+                ubyte tmp = txt.get_row()
+                uword CUT_LINE = blocks.row2line(tmp)
+                blocks.cut_line(CURRENT_BANK, CUT_LINE-1)
+                save_file(CURRENT_BANK, "_flush.out")
+                load_file(CURRENT_BANK, "_flush.out")
+                cursor.place_cursor(main.LEFT_MARGIN, tmp)
                 goto NAVCHARLOOP
              }
              $1b -> {       ; ESC key, throw into NAV mode from any other mode
@@ -274,7 +276,7 @@ main {
             ; check for single letter commands
             when main.cmdBuffer[0] {
               'e' -> {
-                load_file(fn1, CURRENT_BANK)
+                load_file(CURRENT_BANK, fn1)
               }
               'w' -> {
                 save_file(CURRENT_BANK, fn1)
@@ -397,24 +399,24 @@ main {
       ubyte i
       ubyte ub
       uword line
-      diskio.f_open_w_seek(filepath)              ; open file for writing
+      diskio.f_open_w_seek(filepath)
+      main.REC_PTR = main.BASE_PTR + (main.RECSZ * 0)
       for line in 0 to DOC_LENGTH-1 {
         for i in 0 to main.DATASZ-1 {
-           main.printBuffer[i] = 00 
-        }
-        main.REC_PTR = main.BASE_PTR + (main.RECSZ * line)
-        for i in 0 to main.DATASZ-2 {
            ub = @(main.REC_PTR + main.METASZ + i)
            if ub >= 32 and ub <= 126 {
              diskio.f_write(&ub, 1)
            }
         }
         diskio.f_write("\n", 1)
+        ; use the address that is stored in the footer
+        main.REC_PTR = peekw(main.REC_PTR + main.METASZ + main.DATASZ + 1)
       }
       diskio.f_close_w()
+      txt.plot(main.LEFT_MARGIN, txt.get_row() - 1)
     }
 
-    sub load_file(str filepath, ubyte BANK) {
+    sub load_file(ubyte BANK, str filepath) {
         blocks.clear_bank()
         cbm.CLEARST() ; set so READST() is initially known to be clear
         if diskio.f_open(filepath) {

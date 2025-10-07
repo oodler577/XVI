@@ -42,7 +42,7 @@ blocks {
     ; both row and FIRST_LINE_IDX are zero-based, so they can
     ; be used directly here to compute the buffer index of the
     ; file as it is in memory
-    uword line = mkword($00, row) - main.FIRST_LINE_IDX + 1
+    uword line = mkword($00, row) - main.FIRST_LINE_IDX
     return line
   }
 
@@ -61,7 +61,6 @@ blocks {
        ; swap pointers accordingly
     ; case 2
       ; all lines between first and last line
-
     ; set bank of prev_PTR's footer "bank" ubyte 
     poke(prev_PTR+main.METASZ+main.DATASZ, bank)
     ; set next_PRT of prev_PTR's footer "next_PTR" uword 
