@@ -420,7 +420,7 @@ main {
         blocks.clear_bank()
         cbm.CLEARST() ; set so READST() is initially known to be clear
         if diskio.f_open(filepath) {
-          main.DOC_LENGTH = 0
+          uword CURRENT_LINE_NUM = 0
           main.currFilename = filepath
           while cbm.READST() == 0 {
             ;; reset these buffers
@@ -429,9 +429,9 @@ main {
             ; read line
             ubyte length
             length, void = diskio.f_readline(lineBuffer)
-            ; write line to memory as a fixed width record
-            blocks.poke_line_data(CURRENT_BANK, DOC_LENGTH)
-            DOC_LENGTH += 1
+            ; write current lineBuffer to memory as a fixed width record
+            blocks.poke_line_data(CURRENT_BANK, CURRENT_LINE_NUM)
+            CURRENT_LINE_NUM += 1
           }
           diskio.f_close()
           txt.clear_screen()
@@ -441,5 +441,6 @@ main {
           cursor.init()
           cursor.place_cursor(main.LEFT_MARGIN,main.TOP_LINE) ;; move actual cursor
         }
+        main.DOC_LENGTH = CURRENT_LINE_NUM
      }
   }

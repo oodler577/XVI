@@ -3,38 +3,62 @@
 ;
 
 blocks {
-  ; +----------+----------------------------------------------+------------------------------+
-  ; | PREV_PTR           |                 DATA - LINE TEXT             | NEXT_PTR           |
-  ; | main.METASZ Bytes  |    main.DATASZ Bytes                         | main.METASZ Bytes  |
-  ; +----------+----------------------------------------------+------------------------------+
+  ; +--------------------+----------------------------------------------+--------------------+
+  ; | PREV_PTR           |                 DATA - LINE TEXT             |           NEXT_PTR |
+  ; | main.METASZ Bytes  |    main.DATASZ Bytes                         |  main.METASZ Bytes |
+  ; +--------------------+----------------------------------------------+--------------------+
   ; ^
   ; |-- main.BASE_PTR+main.RECSZ*recNo
 
-; TODO - store bank in header?
-
   uword i;
 
-  ;; writes line to memory
-  sub poke_line_data (ubyte bank, uword line) {
-    ; compute addresses - assuming before/after addresses is only valid on first
-    uword prev_PTR = main.BASE_PTR + (main.RECSZ * (line - 1))  ; start addr of prev line
-    uword curr_PTR = main.BASE_PTR + (main.RECSZ * line)        ; start addr of current line
-    uword next_PTR = main.BASE_PTR + (main.RECSZ * (line + 1))  ; start addr of next line
+  ; given line, returns prev start address
+  sub get_prev_PTR (uword line) -> uword {
     if line < 1 {
-      prev_PTR = main.BASE_PTR
+      return main.BASE_PTR
     }
+    return main.BASE_PTR + (main.RECSZ * (line - 1))  ; start addr of prev line
+  }
+  
+  ; give line, returns current start address
+  sub get_curr_PTR (uword line) -> uword  {
+    return main.BASE_PTR + (main.RECSZ * line)        ; start addr of current line
+  }
+
+  ; given line, returns next start address
+  sub get_next_PTR (uword line) -> uword {
+    return main.BASE_PTR + (main.RECSZ * (line + 1))  ; start addr of next line
+  }
+
+  ; given current link, fills in header and footer pointer information
+  sub insert_links (uword curr_PTR, ubyte bank, uword prev_PTR, uword next_PTR ) {
     ; write PREV_PTR section
     poke(curr_PTR, bank)
     pokew(curr_PTR+1, prev_PTR)
     ; write next_PTR section
     poke(curr_PTR + main.METASZ + main.DATASZ, bank)
     pokew(curr_PTR + main.METASZ + main.DATASZ + 1, next_PTR)
-    ; add DATA
+  }
+
+  sub insert_data (uword curr_PTR) {
     ubyte j = 0
     for i in 0 to main.DATASZ-1 {
        poke(curr_PTR + main.METASZ + i, main.lineBuffer[j])    ; fill bank addrs with text DATA
        j = j + 1
     }
+  }
+
+  ;; writes line to memory
+  sub poke_line_data (ubyte bank, uword line) {
+    ; compute addresses - assuming before/after addresses is only valid on first
+    uword curr_PTR = get_curr_PTR(line)  ; start addr of current line
+    uword next_PTR = get_next_PTR(line)  ; start addr of next line
+
+    ; adds prev/next and bank info to record starting at curr_PTR
+    insert_links(curr_PTR, bank, get_prev_PTR(line), get_next_PTR(line))
+    insert_data(curr_PTR)
+
+    ; a
     curr_PTR = next_PTR
   }
 
@@ -49,9 +73,9 @@ blocks {
   ; by-passes line by moving "next" point from previous line to point
   ; to the next line (of current line) - if possible, add an "undo" here
   sub cut_line(ubyte bank, uword line) {
-    uword prev_PTR = main.BASE_PTR + (main.RECSZ * (line - 1))  ; start addr of prev line
-    uword curr_PTR = main.BASE_PTR + (main.RECSZ * line)        ; start addr of current line
-    uword next_PTR = main.BASE_PTR + (main.RECSZ * (line + 1))  ; start addr of next line
+    uword prev_PTR = get_prev_PTR(line)  ; start addr of prevent line
+    uword next_PTR = get_next_PTR(line)  ; start addr of next line
+
     ; point prev "next" to current "next"
     ; case 0
        ; line being removed is the very first line on screen, has no previous line record
@@ -61,12 +85,21 @@ blocks {
        ; swap pointers accordingly
     ; case 2
       ; all lines between first and last line
+
     ; set bank of prev_PTR's footer "bank" ubyte 
+
+    ; TODO ~> we should save current record data in clip board for pasting
+    ;      ~> perhaps add this to main.lineBuffer since this is what that 
+    ;      ~> buffer is for, to temporarily store the data of single line ...
+
+    ; Note:
+    ; The "cut" operation is really a re-wiring of the records to the left
+    ; and right of the line being cut, to by-pass their linkages
+    ;
+
     poke(prev_PTR+main.METASZ+main.DATASZ, bank)
     ; set next_PRT of prev_PTR's footer "next_PTR" uword 
     pokew(prev_PTR+main.METASZ+main.DATASZ+1, next_PTR)
-
-; we should save current record data in clip board for pasting
 
     ; set bank of next_PTR's footer "bank" ubyte 
     poke(next_PTR, bank)
