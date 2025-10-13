@@ -35,6 +35,8 @@ cursor {
     }
 
      sub update_tracker () {
+       txt.color2(7,0)
+
        ubyte c = txt.get_column() ; get current
        ubyte r = txt.get_row()
        txt.plot(0, main.FOOTER_LINE) ; move cursor to the starting position for writing
@@ -42,15 +44,29 @@ cursor {
        txt.print(main.blankLine)
        txt.plot(0, main.FOOTER_LINE) ; move cursor to the starting position for writing
        txt.print(conv.string_out)
-       txt.print(" lines, x:")
+       txt.print(" lines, x: ")
        ubyte col = c - main.LEFT_MARGIN + 1
        void conv.str_ub(col)
        txt.print(conv.string_out)
-       txt.print(", y:")
-       uword row = r - main.TOP_LINE + main.FIRST_LINE_IDX + 1
-       void conv.str_uw(row)
+       txt.print(", y: ")
+       uword X = r - main.TOP_LINE + main.FIRST_LINE_IDX + 1
+       void conv.str_uw(X)
        txt.print(conv.string_out)
+
+;;; mostly for debugging
+       txt.color2(4,0)
+
+       txt.print("  first line idx: ")
+       void conv.str_uw(main.FIRST_LINE_IDX)
+       txt.print(conv.string_out)
+       txt.print(", last line idx: ")
+       void conv.str_uw(main.LAST_LINE_IDX)
+       txt.print(conv.string_out)
+;;; mostly for debugging
+
        txt.plot(c,r)
+
+       txt.color2(5,0)
      }
 
      sub command_prompt () {

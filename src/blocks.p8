@@ -66,7 +66,7 @@ blocks {
     ; both row and FIRST_LINE_IDX are zero-based, so they can
     ; be used directly here to compute the buffer index of the
     ; file as it is in memory
-    uword line = mkword($00, row) - main.FIRST_LINE_IDX
+    uword line = mkword($00, row+1) - main.FIRST_LINE_IDX
     return line
   }
 
@@ -98,13 +98,10 @@ blocks {
     ;
 
     poke(prev_PTR+main.METASZ+main.DATASZ, bank)
-    ; set next_PRT of prev_PTR's footer "next_PTR" uword 
-    pokew(prev_PTR+main.METASZ+main.DATASZ+1, next_PTR)
+    pokew(prev_PTR+main.METASZ+main.DATASZ+1, next_PTR) ; set next_PRT of prev_PTR's footer "next_PTR" uword 
 
-    ; set bank of next_PTR's footer "bank" ubyte 
     poke(next_PTR, bank)
-    ; set next_PRT of next_PTR's footer "prev_PTR" uword 
-    pokew(next_PTR+1, next_PTR)
+    pokew(next_PTR+1, next_PTR) ; set next_PRT of next_PTR's footer "prev_PTR" uword 
   }
 
   sub yank_line() {
@@ -130,6 +127,14 @@ blocks {
       curr_PTR = peekw(curr_PTR + main.METASZ + main.DATASZ + 1)
     }
     txt.plot(main.LEFT_MARGIN, txt.get_row() - 1)
+  }
+
+  sub redraw_screen (ubyte bank) {
+    ubyte c = txt.get_column()
+    ubyte r = txt.get_row()
+    txt.plot(main.LEFT_MARGIN,main.TOP_LINE)                  ; position for full screen redraw
+    draw_range(bank, main.FIRST_LINE_IDX, main.LAST_LINE_IDX) ; full screen redraw
+    txt.plot(c,r)                                             ; put back to where txt plot was
   }
 
   sub print_line (uword line) {

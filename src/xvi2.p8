@@ -174,7 +174,7 @@ main {
               0 -> {
                 ;; jump to start of the current line
                 ubyte r   = txt.get_row()
-                cursor.place_cursor(main.LEFT_MARGIN,r)      ;; move actual cursor
+                cursor.place_cursor(main.LEFT_MARGIN,r)      ;; move visible cursor into place
                 cursor.update_tracker()
               }
               1 -> {
@@ -236,14 +236,17 @@ main {
           void, charD = cbm.GETIN()
           when charD {
             'd' -> {
-                ; get line index of visible screen that will be
-                ; deleted; it is the line the that cursor is on.
-                ubyte tmp = txt.get_row()
-                uword CUT_LINE = blocks.row2line(tmp)
-                blocks.cut_line(CURRENT_BANK, CUT_LINE-1)
-                save_file(CURRENT_BANK, "_flush.out")
-                load_file(CURRENT_BANK, "_flush.out")
-                cursor.place_cursor(main.LEFT_MARGIN, tmp)
+                r = txt.get_row()
+                c = txt.get_column()
+
+                uword CUT_LINE = blocks.row2line(r)
+
+                blocks.cut_line(CURRENT_BANK, CUT_LINE)
+                main.DOC_LENGTH = main.DOC_LENGTH-1
+
+       blocks.redraw_screen(CURRENT_BANK)
+
+                cursor.place_cursor(c, r)
                 goto NAVCHARLOOP
              }
              $1b -> {       ; ESC key, throw into NAV mode from any other mode
@@ -278,6 +281,11 @@ main {
               'e' -> {
                 load_file(CURRENT_BANK, fn1)
               }
+              'L' -> { ; flush memory and reload from disk
+                save_file(CURRENT_BANK, "_flush.out")
+                load_file(CURRENT_BANK, "_flush.out")
+                diskio.delete("_flush.out");
+              }
               'w' -> {
                 save_file(CURRENT_BANK, fn1)
               }
@@ -309,21 +317,19 @@ main {
             if fn0 == "set number" {
               ; redraw with line numbers
               main.shownumbers = 1 
-              txt.plot(main.LEFT_MARGIN,main.TOP_LINE) ; position for full screen redraw
-              blocks.draw_range(CURRENT_BANK, main.FIRST_LINE_IDX, main.FIRST_LINE_IDX+main.HEIGHT-1) ; full screen redraw
-              cursor.place_cursor(c,r)           ;; move actual cursor
+              blocks.redraw_screen(CURRENT_BANK)
+              cursor.place_cursor(c,r)           ;; move visible cursor into place
               cursor.update_tracker()
             }
             else if fn0 == "set nonumber" {
               ; redraw without line numbers
               main.shownumbers = 0
-              txt.plot(main.LEFT_MARGIN,main.TOP_LINE) ; position for full screen redraw
-              blocks.draw_range(CURRENT_BANK, main.FIRST_LINE_IDX, main.FIRST_LINE_IDX+main.HEIGHT-1) ; full screen redraw
-              cursor.place_cursor(c,r)           ;; move actual cursor
+              blocks.redraw_screen(CURRENT_BANK)
+              cursor.place_cursor(c,r)           ;; move visible cursor into place
               cursor.update_tracker()
             }
           }
-          cursor.place_cursor(c,r)      ;; move actual cursor
+          cursor.place_cursor(c,r)      ;; move visible cursor into place
           cursor.update_tracker()
           main.MODE = main.NAV
         }
@@ -348,14 +354,14 @@ main {
       ubyte r = txt.get_row()
       ubyte next_row = r + 1
       if next_row <= main.HEIGHT { ;; enforce bottom line bounds
-        cursor.place_cursor(c,next_row)      ;; move actual cursor
+        cursor.place_cursor(c,next_row)      ;; move visible cursor into place
         cursor.update_tracker()
       }
       else if (main.FIRST_LINE_IDX + main.HEIGHT < main.DOC_LENGTH) {
         main.FIRST_LINE_IDX += 1
-        txt.plot(main.LEFT_MARGIN,main.TOP_LINE) ; position for full screen redraw
-        blocks.draw_range(CURRENT_BANK, main.FIRST_LINE_IDX, main.FIRST_LINE_IDX+main.HEIGHT-1) ; full screen redraw
-        cursor.place_cursor(c,r)           ;; move actual cursor
+        main.LAST_LINE_IDX  += 1 ; !!! TODO account for DOC_LENGTH if the view is showing the doc's last line 
+        blocks.redraw_screen(CURRENT_BANK)
+        cursor.place_cursor(c,r)           ;; move visible cursor into place
         cursor.update_tracker()
       }
     }
@@ -364,7 +370,7 @@ main {
       ubyte c = txt.get_column()
       ubyte r = txt.get_row()
       if r > main.TOP_LINE {       ;; enforce bottom line bounds
-        cursor.place_cursor(c,r-1)         ;; move actual cursor
+        cursor.place_cursor(c,r-1)         ;; move visible cursor into place
         cursor.update_tracker()
       }
       else if (main.FIRST_LINE_IDX > 0) {
@@ -373,7 +379,7 @@ main {
         txt.plot(main.LEFT_MARGIN,main.TOP_LINE)
         blocks.draw_range(CURRENT_BANK, main.FIRST_LINE_IDX, main.FIRST_LINE_IDX+main.HEIGHT-1)
         cursor.update_tracker()
-        cursor.place_cursor(c,r)           ;; move actual cursor
+        cursor.place_cursor(c,r)           ;; move visible cursor into place
       }
     }
 
@@ -381,7 +387,7 @@ main {
       ubyte c = txt.get_column()
       ubyte r = txt.get_row()
       if c-1 >= main.LEFT_MARGIN {  ;; enforce LHS bounds
-        cursor.place_cursor(c-1,r)  ;; move actual cursor
+        cursor.place_cursor(c-1,r)  ;; move visible cursor into place
         cursor.update_tracker()
       }
     }
@@ -390,7 +396,7 @@ main {
       ubyte c = txt.get_column()
       ubyte r = txt.get_row()
       if c+1 <= main.RIGHT_MARGIN { ;; enforce RHS bounds
-        cursor.place_cursor(c+1,r)  ;; move actual cursor
+        cursor.place_cursor(c+1,r)  ;; move visible cursor into place
         cursor.update_tracker()
       }
     }
@@ -439,8 +445,13 @@ main {
           blocks.draw_range(CURRENT_BANK, 0, main.HEIGHT-1)
           cursor.update_tracker()
           cursor.init()
-          cursor.place_cursor(main.LEFT_MARGIN,main.TOP_LINE) ;; move actual cursor
+          cursor.place_cursor(main.LEFT_MARGIN,main.TOP_LINE) ;; move visible cursor into place
         }
         main.DOC_LENGTH = CURRENT_LINE_NUM
+        main.LAST_LINE_IDX = main.DOC_LENGTH-1
+        ; adjust if doc goes beyond viewport on first load
+        if main.DOC_LENGTH > main.BOTTOM_LINE {
+          main.LAST_LINE_IDX = main.BOTTOM_LINE-1
+        }
      }
   }
