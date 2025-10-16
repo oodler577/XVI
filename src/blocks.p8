@@ -12,6 +12,12 @@ blocks {
 
   uword i;
 
+  struct Line {
+    ^^Line left
+    ^^Line right
+    ubyte data
+  }
+
   ; given line, returns prev start address
   sub get_prev_PTR (uword line) -> uword {
     if line < 1 {

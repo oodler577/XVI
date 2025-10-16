@@ -1,34 +1,44 @@
+# --- config ---
+JAVA        ?= java
+PROG8C_JAR  ?= prog8c-11.4.1-all.jar
+PROG8C      := $(JAVA) -jar $(PROG8C_JAR)
+
+TARGET  ?= cx16
+EMU     ?= x16emu
+VERSION ?= 1.2.0
+PKG     ?= XVI
+
+# --- targets ---
 all: clean build bundle run
 
 build:
-	java -jar prog8c-11.4.1-all.jar -target cx16 src/xvi.p8
+	$(PROG8C) -target $(TARGET) src/xvi.p8
 
 bundle:
-	rm -rfv ./XVI
-	mkdir ./XVI 
-	cp xvi.prg XVI/XVI.PRG
-	cp xvi.prg XVI/AUTOBOOT.X16 
-	cp BASLOAD XVI/BASLOAD
-	
-	cp readme.txt XVI/readme.txt
-	zip XVI-1.2.0.zip XVI/ 
+	rm -rfv ./$(PKG)
+	mkdir ./$(PKG)
+	cp xvi.prg $(PKG)/XVI.PRG
+	cp xvi.prg $(PKG)/AUTOBOOT.X16
+	cp BASLOAD $(PKG)/BASLOAD
+	cp readme.txt $(PKG)/readme.txt
+	zip $(PKG)-$(VERSION).zip $(PKG)/
 	mkdir ./releases 2> /dev/null || echo -n
 	cp *.zip releases/
 
 run:
-	cd XVI && x16emu -scale 2
+	cd $(PKG) && $(EMU) -scale 2
 
 trace:
-	x16emu -scale 2 -prg ./XVI -run -trace
+	$(EMU) -scale 2 -prg ./$(PKG) -run -trace
 
 io-test:
-	java -jar prog8c-11.4.1-all.jar -target cx16 src/file-io-test.p8
+	$(PROG8C) -target $(TARGET) src/file-io-test.p8
 
 iso-test:
-	java -jar prog8c-11.4.1-all.jar -target cx16 src/iso-test.p8
+	$(PROG8C) -target $(TARGET) src/iso-test.p8
 
 xvi2:
-	java -jar prog8c-11.4.1-all.jar -target cx16 src/xvi2.p8
+	$(PROG8C) -target $(TARGET) src/xvi2.p8
 	mv xvi2.prg dist/xvi2
 
 sendtox16:
@@ -36,17 +46,17 @@ sendtox16:
 	curl -F "file=@xvi2" http://192.168.0.1/upload.cgi > /dev/null
 
 run2:
-	x16emu -scale 2 -prg ./dist/xvi2 -run
+	$(EMU) -scale 2 -prg ./dist/xvi2 -run
 
 run2demo:
-	x16emu -scale 2 -prg ./dist/xvi2 -run -gif demo.gif
+	$(EMU) -scale 2 -prg ./dist/xvi2 -run -gif demo.gif
 
 run-xvi2-no-scale:
-	x16emu -prg ./xvi2.prg -run -debug
+	$(EMU) -prg ./xvi2.prg -run -debug
 
 debug:
-	x16emu -scale 2 -prg ./xvi2.prg -run -debug
+	$(EMU) -scale 2 -prg ./xvi2.prg -run -debug
 
 clean:
 	rm -fv xvi xvi.prg *.asm 2> /dev/null || echo -n
-	rm -rf ./XVI *.zip       2> /dev/null || echo -n
+	rm -rf ./$(PKG) *.zip 2> /dev/null || echo -n
