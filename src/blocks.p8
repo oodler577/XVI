@@ -2,6 +2,22 @@
 ; provides the storage layer for XVI 2.0+
 ;
 
+allocator {
+    ; extremely trivial arena allocator
+    uword buffer = memory("arena", 2000, 0)
+    uword next = buffer
+
+    sub alloc(ubyte size) -> uword {
+        defer next += size
+        return next
+    }
+
+    sub freeall() {
+        ; cannot free individual allocations only the whole arena at once
+        next = buffer
+    }
+}
+
 blocks {
   ; +--------------------+----------------------------------------------+--------------------+
   ; | PREV_PTR           |                 DATA - LINE TEXT             |           NEXT_PTR |
@@ -13,10 +29,12 @@ blocks {
   uword i;
 
   struct Line {
-    ^^Line left
-    ^^Line right
-    ubyte data
+    ^^Line prev
+    ^^Line next
+    str chars
   }
+
+  ^^Line newline = allocator.alloc(sizeof(Line))
 
   ; given line, returns prev start address
   sub get_prev_PTR (uword line) -> uword {
