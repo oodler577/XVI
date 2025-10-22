@@ -1,40 +1,47 @@
+%import syslib
+%import textio
+
 ;
 ; provides the storage layer for XVI 2.0+
 ;
 
-allocator {
-    ; extremely trivial arena allocator
-    uword buffer = memory("arena", 2000, 0)
-    uword next = buffer
+blocks2 {
 
-    sub alloc(ubyte size) -> uword {
-        defer next += size
-        return next
-    }
+  struct Line {
+    ^^Line prev
+    ^^Line next
+    str data
+  }
 
-    sub freeall() {
-        ; cannot free individual allocations only the whole arena at once
-        next = buffer
+  const uword MAX_LINES  = 256
+  const uword LINE_BYTES = mkword(00,78) ; # of characters
+  const uword LINE_SIZE   = LINE_BYTES + mkword(00,16) + mkword(00,16)
+
+  const uword BUFFER_SIZE = MAX_LINES * LINE_SIZE
+  uword buffer_ptr = memory("buffer", BUFFER_SIZE, 1)
+
+  uword next_ptr = buffer_ptr
+
+  sub newLine(str text) -> ^^Line {
+    if next_ptr >= buffer_ptr + BUFFER_SIZE {
+        txt.print("PANIC: out of memory")
+        sys.exit(1)
     }
+    ^^Line result = next_ptr
+    next_ptr += sizeof(Line)
+    return result
+  }
 }
 
 blocks {
+
   ; +--------------------+----------------------------------------------+--------------------+
   ; | PREV_PTR           |                 DATA - LINE TEXT             |           NEXT_PTR |
   ; | main.METASZ Bytes  |    main.DATASZ Bytes                         |  main.METASZ Bytes |
   ; +--------------------+----------------------------------------------+--------------------+
   ; ^
   ; |-- main.BASE_PTR+main.RECSZ*recNo
-
   uword i;
-
-  struct Line {
-    ^^Line prev
-    ^^Line next
-    str chars
-  }
-
-  ^^Line newline = allocator.alloc(sizeof(Line))
 
   ; given line, returns prev start address
   sub get_prev_PTR (uword line) -> uword {
