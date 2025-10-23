@@ -41,6 +41,12 @@ xvi2:
 	$(PROG8C) -target $(TARGET) src/xvi2.p8
 	mv xvi2.prg dist/xvi2
 
+structs:
+	$(PROG8C) -target $(TARGET) src/structs.p8
+
+runstructs:
+	$(EMU) -scale 2 -prg structs.prg -run
+
 sendtox16:
 	cp xvi2.prg xvi2
 	curl -F "file=@xvi2" http://192.168.0.1/upload.cgi > /dev/null

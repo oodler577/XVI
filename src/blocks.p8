@@ -7,14 +7,27 @@
 
 blocks2 {
 
-  struct Line {
-    ^^Line prev
-    ^^Line next
-    str data
+  ; although we're only supporting 1 tab at the moment, this struct
+  ; is meant to track a document among multple open in "tabs"
+  struct document {
+    ubyte tabNum
+    str filename
+    ubyte type
+    ubyte startbank
+    uword startAddress
   }
 
-  const uword MAX_LINES  = 256
-  const uword LINE_BYTES = mkword(00,78) ; # of characters
+  ; line struct, implements a doubly linked list
+  struct Line {
+    ubyte prevBank ; bank number of previous line
+    ^^Line prev    ; start address of previous line record, on prevbank
+    str data       ; character data for the line
+    ubyte nextBank ; bank number of the next line
+    ^^Line next    ; start address of the next line record, on nextBank
+  }
+
+  const uword MAX_LINES  = 512
+  const uword LINE_BYTES = mkword(00,78) ; # of characters in a line
   const uword LINE_SIZE   = LINE_BYTES + mkword(00,16) + mkword(00,16)
 
   const uword BUFFER_SIZE = MAX_LINES * LINE_SIZE
@@ -175,8 +188,7 @@ blocks {
     txt.plot(0, txt.get_row())
     ; print line number
     if main.shownumbers == 1 {
-      void conv.str_uw(line + 1)
-      txt.print(conv.string_out)
+      txt.print(conv.str_uw(line + 1))
     }
     ; print line
     txt.plot(main.LEFT_MARGIN, txt.get_row())

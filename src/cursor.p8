@@ -40,28 +40,23 @@ cursor {
        ubyte c = txt.get_column() ; get current
        ubyte r = txt.get_row()
        txt.plot(0, main.FOOTER_LINE) ; move cursor to the starting position for writing
-       void conv.str_uw(main.DOC_LENGTH)
        txt.print(main.blankLine)
        txt.plot(0, main.FOOTER_LINE) ; move cursor to the starting position for writing
-       txt.print(conv.string_out)
+       txt.print(conv.str_uw(main.DOC_LENGTH))
        txt.print(" lines, x: ")
        ubyte col = c - main.LEFT_MARGIN + 1
-       void conv.str_ub(col)
-       txt.print(conv.string_out)
+       txt.print(conv.str_ub(col))
        txt.print(", y: ")
        uword X = r - main.TOP_LINE + main.FIRST_LINE_IDX + 1
-       void conv.str_uw(X)
-       txt.print(conv.string_out)
+       txt.print(conv.str_uw(X))
 
 ;;; mostly for debugging
        txt.color2(4,0)
 
        txt.print("  first line idx: ")
-       void conv.str_uw(main.FIRST_LINE_IDX)
-       txt.print(conv.string_out)
+       txt.print(conv.str_uw(main.FIRST_LINE_IDX))
        txt.print(", last line idx: ")
-       void conv.str_uw(main.LAST_LINE_IDX)
-       txt.print(conv.string_out)
+       txt.print(conv.str_uw(main.LAST_LINE_IDX))
 ;;; mostly for debugging
 
        txt.plot(c,r)
