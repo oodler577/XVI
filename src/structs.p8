@@ -27,7 +27,7 @@ main {
   uword prev     = $0000
 
   sub allocLine(str initial) -> uword {
-    uword this = next    ; first time this is called, it gets addr stored as doc.firstLine
+    uword this = next
     ^^Line line = this
     line.text = " " * 80
     line.text = initial
@@ -36,7 +36,7 @@ main {
     next      += sizeof(Line)+80 ; next is updated for the next call
     line.next  = next
     doc.lineCount += 1
-    return this ; addr of newly initiated Line
+    return this                  ; addr of newly initiated Line
   }
 
   sub freeAll() {
@@ -47,9 +47,9 @@ main {
     ; cx16.rambank(1)
 
     txt.iso()
-    doc.tabNum               = 0            ; future proofing
-    doc.charset              = 0            ; future proofing
-    doc.startBank            = 0            ; future proofing
+    doc.tabNum               = 0 ; for future proofing
+    doc.charset              = 0 ; for future proofing
+    doc.startBank            = 0 ; for future proofing
     doc.lineCount            = 0
     doc.firstLineAddr        = next
 
@@ -67,6 +67,8 @@ main {
       text = "this is initial text for line instance, $"
       strings.append(text,conv.str_uwhex(i))
       ^^Line line  = allocLine(text) 
+
+      ; testing to make sure string got written properly
       if strings.compare(text,line.text) == 0 {
         txt.print("     Line: text, PASS!\n")
       }
