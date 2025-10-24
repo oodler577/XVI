@@ -1,12 +1,11 @@
+%zeropage basicsafe
+%option no_sysinit
+%encoding iso
+
 %import textio
 %import strings
 %import conv
 %import syslib
-%import diskio
-%import verafx
-%option no_sysinit
-%zeropage basicsafe
-%encoding iso
 
 
 main {
@@ -30,20 +29,13 @@ main {
 
   sub allocLine(str initial) -> uword {
     uword this = next    ; first time this is called, it gets addr stored as doc.firstLine
-
     ^^Line line = this
     line.text = " " * 80
-
-    ;strings.append(initial,conv.str_uwhex(next)) ; debug
-
     line.text = initial
-
     prev       = this - sizeof(Line)-80
     line.prev  = prev
-
     next      += sizeof(Line)+80 ; next is updated for the next call
     line.next  = next
-
     doc.lineCount += 1
     return this ; addr of newly initiated Line
   }
@@ -53,7 +45,7 @@ main {
   }
 
   sub start () {
-    cx16.rambank(1)
+    ; cx16.rambank(1)
 
     txt.iso()
     doc.tabNum               = 0            ; future proofing
@@ -96,6 +88,5 @@ main {
     txt.nl()
     txt.print("\nLine Count    ")
     txt.print_uw0(doc.lineCount)
-
   }
 }
