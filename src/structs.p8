@@ -44,14 +44,14 @@ main {
   }
 
   sub start () {
-    ; cx16.rambank(1)
-
     txt.iso()
     doc.tabNum               = 0 ; for future proofing
     doc.charset              = 0 ; for future proofing
-    doc.startBank            = 0 ; for future proofing
+    doc.startBank            = 1 ; for future proofing
     doc.lineCount            = 0
     doc.firstLineAddr        = next
+
+    cx16.rambank(doc.startBank)
 
     txt.print("tab index             ")
     txt.print_ub(doc.tabNum) 
