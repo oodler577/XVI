@@ -56,7 +56,7 @@ main {
     doc.firstLineAddr        = &doc.eof + 2 ; start of first line, inits as next address after doc.eof's addr
                                             ; but since doc.firstLineAddr is eof + 2, no data is there yet
 
-    txt.print("tab index             ")
+    txt.print("tab index            \n ")
     txt.print_ub(doc.tabNum) 
     txt.nl()
     txt.print("initial buffer address")
