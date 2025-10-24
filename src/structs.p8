@@ -7,7 +7,6 @@
 %import conv
 %import syslib
 
-
 main {
   struct Document {
     ubyte tabNum         ; 0
