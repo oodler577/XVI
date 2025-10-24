@@ -28,12 +28,19 @@ main {
   uword next            = buffer
 
   sub allocLine(str initial) -> uword {
-    uword result = next            ; first time this is called, it gets buffer's addr
+    uword result = next     ; first time this is called, it gets buffer's addr
+    ^^Line line = result
+    line.text = " " * 80
+    line.text = initial
+
+    txt.nl()
+    txt.print("Line start address: ")
+    txt.print_uwhex(result, true) 
+    txt.nl()
+
     defer next += sizeof(Line)+80  ; next is updated for the next call
-    ^^Line line = result           ; give accessors to block of memory, starting at RHS address
-    line.text = " " * 80           ; initialize the block for text
-    line.text = initial            ; assign provided string
-    return result                  ; returns address of initialized block as uword
+
+    return result           ; returns pointer of type ubyte for ^^Line instantiation
   }
 
   sub freeAll() {
@@ -67,8 +74,8 @@ main {
 
     ubyte i
     for i in 1 to 5 {
-      ; give struct instance starting address so it can map accessors
       ^^Line line  = allocLine("this is the initial text") 
+      
       txt.nl()
       txt.print(line.text)
     }
