@@ -8,13 +8,14 @@
 %zeropage basicsafe
 %encoding iso
 
+
 main {
   struct Document {
     ubyte tabNum         ; 0
     ubyte charset        ; 0 = ISO, 1 = PETSCI
     ubyte startBank      ; actual bank number for switching
     uword firstLineAddr  ; address of the first line
-    uword eof            ; address of the very last datum of the file
+    uword lineCount      ; number of lines
   }
 
   struct Line {
@@ -23,62 +24,78 @@ main {
     str text
   }
 
-  ^^Document doc        = $A000
-  uword buffer          = $A000 + sizeof(Document)
-  uword next            = buffer
+  ^^Document doc = $1000
+  uword next     = $1000 + sizeof(Document)
+  uword prev     = $0000
 
   sub allocLine(str initial) -> uword {
-    uword result = next     ; first time this is called, it gets buffer's addr
-    ^^Line line = result
+    uword this = next    ; first time this is called, it gets addr stored as doc.firstLine
+
+    ^^Line line = this
     line.text = " " * 80
+
+    ;strings.append(initial,conv.str_uwhex(next)) ; debug
+
     line.text = initial
 
-    txt.nl()
-    txt.print("Line start address: ")
-    txt.print_uwhex(result, true) 
-    txt.nl()
+    prev       = this - sizeof(Line)-80
+    line.prev  = prev
 
-    defer next += sizeof(Line)+80  ; next is updated for the next call
+    next      += sizeof(Line)+80 ; next is updated for the next call
+    line.next  = next
 
-    return result           ; returns pointer of type ubyte for ^^Line instantiation
+    doc.lineCount += 1
+    return this ; addr of newly initiated Line
   }
 
   sub freeAll() {
-    next = buffer
+    next = doc.firstLineAddr
   }
 
   sub start () {
+    cx16.rambank(1)
+
     txt.iso()
     doc.tabNum               = 0            ; future proofing
     doc.charset              = 0            ; future proofing
     doc.startBank            = 0            ; future proofing
-    doc.eof                  = &doc.eof     ; address of last useful data in doc
-    doc.firstLineAddr        = &doc.eof + 2 ; start of first line, inits as next address after doc.eof's addr
-                                            ; but since doc.firstLineAddr is eof + 2, no data is there yet
+    doc.lineCount            = 0
+    doc.firstLineAddr        = next
 
-    txt.print("tab index            \n ")
+    txt.print("tab index             ")
     txt.print_ub(doc.tabNum) 
-    txt.nl()
-    txt.print("initial buffer address")
-    txt.print_uwhex(buffer, true) 
-    txt.nl()
-    txt.print("initial next address  ")
-    txt.print_uwhex(next, true) 
-    txt.nl()
-    txt.print("first line (no data)  ")
+    txt.print("\nfirst line (no data)  ")
     txt.print_uwhex(doc.firstLineAddr, true)
-    txt.nl()
-    txt.print("current actual eof    ")
-    txt.print_uwhex(doc.eof, true)
-    txt.nl()
+    txt.print("\nLine Count    ")
+    txt.print_uw0(doc.lineCount)
 
-    ubyte i
-    for i in 1 to 5 {
-      ^^Line line  = allocLine("this is the initial text") 
-      
-      txt.nl()
-      txt.print(line.text)
+    uword i
+    str text = " " * 80
+    for i in doc.firstLineAddr to $9EFF step sizeof(Line)+80 { ; max is $BFFF
+      txt.print("\n\n")
+      text = "this is initial text for line instance, $"
+      strings.append(text,conv.str_uwhex(i))
+      ^^Line line  = allocLine(text) 
+      if strings.compare(text,line.text) == 0 {
+        txt.print("     Line: text, PASS!\n")
+      }
+      else {
+        txt.print("     Line: text, FAIL!\n")
+      }
+      text = " " * 80
+
+      ; some instance member info
+      txt.print("Prev Line: ")
+      txt.print_uwhex(line.prev, true) 
+      txt.print("\nThis Line: ")
+      txt.print_uwhex(line, true) 
+      txt.print("\nNext Line: ")
+      txt.print_uwhex(line.next, true) 
     }
+
+    txt.nl()
+    txt.print("\nLine Count    ")
+    txt.print_uw0(doc.lineCount)
 
   }
 }
