@@ -45,7 +45,7 @@ structs:
 	$(PROG8C) -target $(TARGET) src/structs.p8
 
 runstructs:
-	$(EMU) -debug -scale 2 -prg structs.prg -run
+	$(EMU) -debug -scale 2 -prg structs.prg -run -gif demo.gif
 
 sendtox16:
 	cp xvi2.prg xvi2
