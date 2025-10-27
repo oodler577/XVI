@@ -115,11 +115,13 @@ main {
       say("\n\n")
       text = "this is initial text for line instance, $"
       strings.append(text,conv.str_uwhex(i))
-      uword line_addr  = i
+      line_addr  = i
 
-      ^^Line line = line_addr
+      line = line_addr
 
       ; testing to make sure string got written properly
+      say(text)
+      say(line.text)
       if strings.compare(text,line.text) == 0 {
         say("     Line: text, PASS!\n")
       }
