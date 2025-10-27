@@ -76,29 +76,29 @@ main {
     str TXT = " " * 80
 
     cbm.CLEARST()
-    diskio.f_open("sample1.txt")
-    repeat 5 {
+    diskio.f_open("sample6.txt")
+    repeat 2 {
       say("\n\n")
-      TXT = "this is initial text for line instance, $"
-      strings.append(TXT,conv.str_uwhex(i))
+      TXT = " " * 80 ;this is initial text for line instance, $"
+      ;strings.append(TXT,conv.str_uwhex(i))
 
-      ;str readBuffer = " " * 80
-      ;ubyte length
-      ;length, void = diskio.f_readline(readBuffer)
-      ;sayb(length)
-      ;TXT = readBuffer
+      str readBuffer = " " * 80
+      ubyte length
+      length, void = diskio.f_readline(readBuffer)
+      sayb(length)
+      TXT = readBuffer
 
       uword line_addr  = allocLine(TXT) 
 
       ^^Line line = line_addr
 
       ; testing to make sure string got written properly
+      say(TXT)
+      say(line.text)
       if strings.compare(TXT,line.text) == 0 {
         say("     Line: text, PASS!\n")
       }
       else {
-        say(TXT)
-        say(line.text)
         say("     Line: text, FAIL!\n")
       }
       TXT = " " * 80
@@ -121,7 +121,7 @@ main {
     say("re-reading")
 
     i = doc.firstLineAddr
-    repeat 5 {
+    repeat 2 {
       say("\n\n")
       TXT = "this is initial text for line instance, $"
       strings.append(TXT,conv.str_uwhex(i))
