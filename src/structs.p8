@@ -73,25 +73,35 @@ main {
     sayw(doc.lineCount)
 
     uword i = doc.firstLineAddr
-    str text = " " * 80
+    str TXT = " " * 80
+
+    cbm.CLEARST()
+    diskio.f_open("sample1.txt")
     repeat 5 {
       say("\n\n")
-      text = "this is initial text for line instance, $"
-      strings.append(text,conv.str_uwhex(i))
-      uword line_addr  = allocLine(text) 
+      TXT = "this is initial text for line instance, $"
+      strings.append(TXT,conv.str_uwhex(i))
+
+      ;str readBuffer = " " * 80
+      ;ubyte length
+      ;length, void = diskio.f_readline(readBuffer)
+      ;sayb(length)
+      ;TXT = readBuffer
+
+      uword line_addr  = allocLine(TXT) 
 
       ^^Line line = line_addr
 
       ; testing to make sure string got written properly
-      if strings.compare(text,line.text) == 0 {
+      if strings.compare(TXT,line.text) == 0 {
         say("     Line: text, PASS!\n")
       }
       else {
-        say(text)
+        say(TXT)
         say(line.text)
         say("     Line: text, FAIL!\n")
       }
-      text = " " * 80
+      TXT = " " * 80
 
       ; some instance member info
       say("Prev Line: ")
@@ -113,24 +123,24 @@ main {
     i = doc.firstLineAddr
     repeat 5 {
       say("\n\n")
-      text = "this is initial text for line instance, $"
-      strings.append(text,conv.str_uwhex(i))
+      TXT = "this is initial text for line instance, $"
+      strings.append(TXT,conv.str_uwhex(i))
       line_addr  = i
 
       line = line_addr
 
       ; testing to make sure string got written properly
-      say(text)
+      say(TXT)
       say(line.text)
-      if strings.compare(text,line.text) == 0 {
+      if strings.compare(TXT,line.text) == 0 {
         say("     Line: text, PASS!\n")
       }
       else {
-        say(text)
+        say(TXT)
         say(line.text)
         say("     Line: text, FAIL!\n")
       }
-      text = " " * 80
+      TXT = " " * 80
 
       ; some instance member info
       say("Prev Line: ")
