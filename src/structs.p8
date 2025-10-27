@@ -107,6 +107,39 @@ main {
     txt.nl()
     say("\nLine Count    ")
     sayw(doc.lineCount)
+
+    say("re-reading")
+
+    i = doc.firstLineAddr
+    repeat 5 {
+      say("\n\n")
+      text = "this is initial text for line instance, $"
+      strings.append(text,conv.str_uwhex(i))
+      uword line_addr  = i
+
+      ^^Line line = line_addr
+
+      ; testing to make sure string got written properly
+      if strings.compare(text,line.text) == 0 {
+        say("     Line: text, PASS!\n")
+      }
+      else {
+        say(text)
+        say(line.text)
+        say("     Line: text, FAIL!\n")
+      }
+      text = " " * 80
+
+      ; some instance member info
+      say("Prev Line: ")
+      sayhex(line.prev) 
+      say("\nThis Line: ")
+      sayhex(line) 
+      say("\nNext Line: ")
+      sayhex(line.next) 
+
+      i = i + sizeof(Line)+80
+    }
   }
 
   ; util functions
