@@ -82,12 +82,14 @@ main {
     } else {
         tail.next = this
     }
-    tail = this 
+
     ; populate the fields
     this.prev = tail
     this.next = 0
     this.text = txtbuf
     strings.copy(initial, this.text)
+
+    tail = this
     ; and return
     return this
   }
