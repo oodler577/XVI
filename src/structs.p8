@@ -46,22 +46,39 @@ main {
   }
 
   ^^Document doc = $1000
-  uword next     = $1000 + sizeof(Document)
-  uword prev     = $0000
 
-  str readBuffer = " " * 81
+  const uword MaxLength = 80
+  const uword LineSize = sizeof(Line) + MaxLength + 1
 
-  sub allocLine() -> uword {
-    uword this = next
-    ^^Line line = this
-    line.text  = " " * 81
-    line.text  = readBuffer
-    prev       = this - sizeof(Line)
-    line.prev  = prev
-    next      += sizeof(Line) ; next is updated for the next call
-    line.next  = next
-    doc.lineCount += 1
-    return this                  ; addr of newly initiated Line
+  const uword MaxLines = 100
+  const uword BufferSize = MaxLines * LineSize
+  uword Buffer = memory("Buffer", BufferSize, 1)
+
+  ^^Line next = Buffer
+  ^^Line head = 0 ; points to first line 
+  ^^Line tail = 0 ; points to last line
+
+  ; Allocator for linked list of Line instances contributed
+  ; by MarkTheStrange on #prog8-dev
+  sub allocLine(^^ubyte initial) -> ^^Line {
+    ^^Line this = next                   ; return next space 
+    next += 1                            ; advance to end of struct
+    uword txtbuf = next as uword         ; use space after struct as buffer for text 
+    next = next as uword + MaxLength + 1 ; and advance past buffer space
+    ; link the new line in 
+    if head == 0 {
+        head = this
+    } else {
+        tail.next = this
+    }
+    tail = this 
+    ; populate the fields
+    this.prev = tail
+    this.next = 0
+    this.text = txtbuf
+    strings.copy(initial, this.text)
+    ; and return
+    return this
   }
 
   sub freeAll() {
@@ -84,11 +101,11 @@ main {
     diskio.f_open("sample6.txt")
     say("reading ...")
     repeat 11 {
-      readBuffer = " " * 81
+      str readBuffer = " " * 81
       ubyte length
-      ;length, void = diskio.f_readline(readBuffer)
-       readBuffer = "0" * 80
-      uword line_addr  = allocLine() 
+      length, void = diskio.f_readline(readBuffer)
+      uword line_addr  = allocLine(readBuffer) 
+;;;;;;;;;;;;;;; TODO: implement full file read and proceed!
       ^^Line line = line_addr
 sayhex(line.text)
 say(line.text)
