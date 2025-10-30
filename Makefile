@@ -1,7 +1,7 @@
 # --- config ---
-JAVA        ?= java
-PROG8C_JAR  ?= prog8c-11.4.1-all.jar
-PROG8C      := $(JAVA) -jar $(PROG8C_JAR)
+JAVA	?= java
+JAR	?= prog8c-11.4.1-all.jar
+PROG8C	:= $(JAVA) -jar $(JAR)
 
 TARGET  ?= cx16
 EMU     ?= x16emu
