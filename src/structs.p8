@@ -50,7 +50,7 @@ cursor {
          return;
        } 
      goto CMDINPUT
-     strings.strip(cursor.cmdBuffer)
+     strings.rstrip(cursor.cmdBuffer)
   }
 }
 
@@ -161,6 +161,8 @@ main {
     sys.wait(20)
     txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
 
+    ubyte tries = 0
+    READFILE:
     cbm.CLEARST() ; set so READST() is initially known to be clear
     if diskio.f_open(filepath) {
       while cbm.READST() == 0 {
@@ -169,7 +171,7 @@ main {
         ; read line
         ubyte length
         length, void = diskio.f_readline(lineBuffer)
-        strings.strip(lineBuffer)
+        strings.rstrip(lineBuffer)
         if length > MaxLength {
           str tmp = " " * (MaxLength + 1)
           strings.slice(lineBuffer, 0, MaxLength, tmp) 
@@ -181,11 +183,27 @@ main {
       diskio.f_close()
       txt.clear_screen()
     }
+    else {
+      tries++
+      diskio.f_close()
+      if tries <= 15 {
+        goto READFILE
+      }
+      else {
+        txt.plot(0, view.BOTTOM_LINE)
+        say(view.BLANK_LINE)
+        txt.plot(view.LEFT_MARGIN, view.BOTTOM_LINE)
+        txt.print("can't open file after 15 attempts ...")
+        sys.wait(120)
+        splash()
+      }
+    }
     txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
   }
 
   sub splash() {
-    txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
+    txt.clear_screen()
+    txt.plot(0,view.TOP_LINE)
     repeat 20 {
       txt.plot(0, txt.get_row())
       say("~") 
@@ -218,6 +236,7 @@ main {
     doc.firstLine            = Buffer 
     doc.filepath             = " " * 81
 
+    txt.plot(0,1)
     splash()
 
     sys.wait(120)
@@ -244,7 +263,7 @@ main {
              ; parse out file name (everything after ":N")
              str fn1 = " " * 79
              strings.slice(cursor.cmdBuffer, 2, strings.length(cursor.cmdBuffer), fn1)
-             strings.strip(fn1)
+             strings.rstrip(fn1)
 
              when cursor.cmdBuffer[0] {
                'e' -> {
