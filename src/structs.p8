@@ -134,6 +134,7 @@ main {
 
   sub freeAll() {
     next = Buffer
+    sys.memset(next, BufferSize, 0)
   }
 
   sub draw_initial_screen () {
@@ -142,6 +143,7 @@ main {
       if doc.lineCount > view.BOTTOM_LINE - view.TOP_LINE { 
         i = view.BOTTOM_LINE - view.TOP_LINE
       }
+      txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
       repeat i {
         txt.plot(view.LEFT_MARGIN, txt.get_row())
         ^^Line line = addr
@@ -151,6 +153,7 @@ main {
   }
 
   sub load_file(str filepath) {
+    freeAll()
     txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
     strings.copy(filepath,doc.filepath)
     txt.print("Loading ")
@@ -218,8 +221,8 @@ main {
     splash()
 
     sys.wait(120)
-    load_file("b.txt")
-    draw_initial_screen()
+    ;load_file("b.txt")
+    ;draw_initial_screen()
 
     ubyte char = 0 
     NAVCHARLOOP:
@@ -231,9 +234,6 @@ main {
         $3a -> {       ; ':',  mode
           if main.MODE == mode.NAV {
              main.MODE = mode.COMMAND
-
-             view.c = txt.get_column()
-             view.r = txt.get_row()
 
              cursor.command_prompt()
 
