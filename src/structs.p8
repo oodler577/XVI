@@ -28,7 +28,7 @@ view {
 }
 
 cursor {
-  str cmdBuffer = " " * 79
+  str cmdBuffer = " " * 50
   sub command_prompt () {
      ubyte cmdchar
      txt.plot(0, view.FOOTER_LINE) ; move cursor to the starting position for writing
@@ -50,7 +50,7 @@ cursor {
          return;
        } 
      goto CMDINPUT
-     strings.rstrip(cursor.cmdBuffer)
+     strings.strip(cursor.cmdBuffer)
   }
 }
 
@@ -153,6 +153,8 @@ main {
   }
 
   sub load_file(str filepath) {
+ubyte i
+strings.strip(filepath)
     freeAll()
     txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
     strings.copy(filepath,doc.filepath)
@@ -261,9 +263,9 @@ main {
              txt.print(view.BLANK_LINE)
 
              ; parse out file name (everything after ":N")
-             str fn1 = " " * 79
+             str fn1 = " " * 50
              strings.slice(cursor.cmdBuffer, 2, strings.length(cursor.cmdBuffer), fn1)
-             strings.rstrip(fn1)
+             strings.strip(fn1)
 
              when cursor.cmdBuffer[0] {
                'e' -> {
