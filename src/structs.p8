@@ -28,7 +28,37 @@ view {
 }
 
 cursor {
-  str cmdBuffer = " " * 50
+  str cmdBuffer = " " * 60
+  ubyte saved_char
+
+  sub save_char(ubyte c, ubyte r) {
+    saved_char = txt.getchr(c,r)
+  }
+
+  sub save_current_char() {
+    ubyte c = txt.get_column()
+    ubyte r = txt.get_row()
+    save_char(c,r)
+  }
+
+  sub restore_current_char() {
+    ubyte c = txt.get_column()
+    ubyte r = txt.get_row()
+    txt.plot(c,r)
+    txt.chrout(saved_char)
+    txt.plot(c,r)
+  }
+
+  ; the cursor is the underlying character, with the color scheme inverted
+  sub place(ubyte new_c, ubyte new_r) {
+    restore_current_char()  ;; restore char in current cursor location
+    txt.plot(new_c,new_r)   ;; move cursor to new location
+    save_current_char()     ;; save char in the current location (here, the new c,r)
+    txt.chrout(saved_char)  ;; write save char
+    txt.setclr(new_c,new_r,$16) ; inverses color
+    txt.plot(new_c,new_r)   ;; move cursor back after txt.chrout advances cursor
+  }
+
   sub command_prompt () {
      ubyte cmdchar
      txt.plot(0, view.FOOTER_LINE) ; move cursor to the starting position for writing
@@ -153,8 +183,8 @@ main {
   }
 
   sub load_file(str filepath) {
-ubyte i
-strings.strip(filepath)
+    ubyte i
+    strings.strip(filepath)
     freeAll()
     txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
     strings.copy(filepath,doc.filepath)
@@ -200,7 +230,6 @@ strings.strip(filepath)
         splash()
       }
     }
-    txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
   }
 
   sub splash() {
@@ -263,7 +292,7 @@ strings.strip(filepath)
              txt.print(view.BLANK_LINE)
 
              ; parse out file name (everything after ":N")
-             str fn1 = " " * 50
+             str fn1 = " " * 60
              strings.slice(cursor.cmdBuffer, 2, strings.length(cursor.cmdBuffer), fn1)
              strings.strip(fn1)
 
@@ -271,11 +300,9 @@ strings.strip(filepath)
                'e' -> {
                  load_file(fn1)
                  draw_initial_screen()
+                 cursor.place(view.LEFT_MARGIN, view.TOP_LINE)
                  main.MODE = mode.NAV
                 }
-;               'w' -> {
-;                 save_file(CURRENT_BANK, fn1)
-;               }
                'q' -> {
                  txt.iso_off()
                  sys.exit(0)
@@ -283,8 +310,58 @@ strings.strip(filepath)
              }
           }
         }
+        'k',$91 -> {       ; $6b, UP
+          if main.MODE == mode.NAV {
+            cursor_up_on_k()
+          }
+        }
+        'j', $11 -> {      ; DOWN
+          if main.MODE == mode.NAV {
+            cursor_down_on_j()
+          }
+        }
+        'h',$9d -> {       ; $68, LEFT 
+          if main.MODE == mode.NAV {
+            cursor_left_on_h()
+          }
+        }
+        'l',$1d -> {       ; $6c, RIGHT 
+          if main.MODE == mode.NAV {
+            cursor_right_on_l()
+          }
+        }
       }
       goto NAVCHARLOOP 
+  }
+
+; TODO - enforce boundary conditions
+
+  sub cursor_up_on_k () {
+    view.r = txt.get_row()
+    view.c = txt.get_column()
+    ubyte next_row = view.r-1
+    cursor.place(view.c,next_row)
+  }
+
+  sub cursor_down_on_j () {
+    view.r = txt.get_row()
+    view.c = txt.get_column()
+    ubyte next_row = view.r+1
+    cursor.place(view.c,next_row)
+  }
+
+  sub cursor_left_on_h () {
+    view.r = txt.get_row()
+    view.c = txt.get_column()
+    ubyte next_col = view.c-1
+    cursor.place(next_col,view.r)
+  }
+
+  sub cursor_right_on_l () {
+    view.r = txt.get_row()
+    view.c = txt.get_column()
+    ubyte next_col = view.c+1
+    cursor.place(next_col,view.r)
   }
 
   ; util functions
