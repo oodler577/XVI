@@ -17,7 +17,7 @@ mode {
 
 view {
   const ubyte LEFT_MARGIN  = 3
-  const ubyte RIGHT_MARGIN = 79
+  const ubyte RIGHT_MARGIN = 78
   const ubyte HEIGHT       = 57
   const ubyte TOP_LINE     = 2  ; row+1 of the first line of the document (FIRST_LINE_IDX)
   const ubyte MIDDLE_LINE  = 27
@@ -170,8 +170,8 @@ main {
   sub draw_initial_screen () {
       uword addr = Buffer
       ubyte i
-      if doc.lineCount > view.BOTTOM_LINE - view.TOP_LINE { 
-        i = view.BOTTOM_LINE - view.TOP_LINE
+      if doc.lineCount > view.BOTTOM_LINE - 1 {
+        i = view.BOTTOM_LINE - 1
       }
       txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
       repeat i {
@@ -339,29 +339,37 @@ main {
   sub cursor_up_on_k () {
     view.r = txt.get_row()
     view.c = txt.get_column()
-    ubyte next_row = view.r-1
-    cursor.place(view.c,next_row)
+    if view.r > view.TOP_LINE {
+      ubyte next_row = view.r-1
+      cursor.place(view.c,next_row)
+    }
   }
 
   sub cursor_down_on_j () {
     view.r = txt.get_row()
     view.c = txt.get_column()
-    ubyte next_row = view.r+1
-    cursor.place(view.c,next_row)
+    if view.r <  view.BOTTOM_LINE {
+      ubyte next_row = view.r+1
+      cursor.place(view.c,next_row)
+    }
   }
 
   sub cursor_left_on_h () {
     view.r = txt.get_row()
     view.c = txt.get_column()
-    ubyte next_col = view.c-1
-    cursor.place(next_col,view.r)
+    if view.c > view.LEFT_MARGIN {
+      ubyte next_col = view.c-1
+      cursor.place(next_col,view.r)
+    }
   }
 
   sub cursor_right_on_l () {
     view.r = txt.get_row()
     view.c = txt.get_column()
-    ubyte next_col = view.c+1
-    cursor.place(next_col,view.r)
+    if view.c < view.RIGHT_MARGIN {
+      ubyte next_col = view.c+1
+      cursor.place(next_col,view.r)
+    }
   }
 
   ; util functions
