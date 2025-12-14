@@ -72,7 +72,7 @@ cursor {
      txt.plot(0, view.FOOTER_LINE) ; move cursor to the starting position for writing
      txt.print(view.BLANK_LINE)
      txt.plot(0, view.FOOTER_LINE)
-     txt.print(":")
+     txt.print(": ")
      CMDINPUT:
        void, cmdchar = cbm.GETIN()
        if cmdchar != $0d { ; any character now but <ENTER>
@@ -388,9 +388,9 @@ main {
     txt.plot(1, view.FOOTER_LINE)
     printw(doc.lineCount)
     prints(" lines, x: ")
-    printw(X)
+    printw(X - view.LEFT_MARGIN + 1)
     prints(", y: ")
-    printw(Y)
+    printw(Y - view.TOP_LINE    + 1)
     txt.plot(X,Y)
   }
 
