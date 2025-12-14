@@ -9,22 +9,30 @@
 %import diskio
 
 mode {
-  const ubyte NAV          = 1  ; modal state for navigation, default state
-  const ubyte INSERT       = 2  ; modal state for insert mode, triggered with ctrl-i
-  const ubyte REPLACE      = 3  ; modal state for replacement mode, triggered with ctrl-r
-  const ubyte COMMAND      = 4  ; modal state for entering a 
+  const ubyte NAV           = 1  ; modal state for navigation, default state
+  const ubyte INSERT        = 2  ; modal state for insert mode, triggered with ctrl-i
+  const ubyte REPLACE       = 3  ; modal state for replacement mode, triggered with ctrl-r
+  const ubyte COMMAND       = 4  ; modal state for entering a 
 }
 
 view {
-  const ubyte LEFT_MARGIN  = 3
-  const ubyte RIGHT_MARGIN = 78
-  const ubyte HEIGHT       = 57
-  const ubyte TOP_LINE     = 2  ; row+1 of the first line of the document (FIRST_LINE_IDX)
-  const ubyte MIDDLE_LINE  = 27
-  const ubyte BOTTOM_LINE  = 57 ; row+1 of the last line of the view port (LAST_LINE_IDX)
-  const ubyte FOOTER_LINE  = 58
-  str         BLANK_LINE   = " " * 79
-  ubyte r, c
+  const ubyte LEFT_MARGIN   = 3
+  const ubyte RIGHT_MARGIN  = 78
+  const ubyte HEIGHT        = 57 ; absolute height of the edit/view area
+  const ubyte TOP_LINE      = 2  ; row+1 of the first line of the document (FIRST_LINE_IDX)
+  const ubyte MIDDLE_LINE   = 27
+  const ubyte BOTTOM_LINE   = 57 ; row+1 of the last line of the view port (LAST_LINE_IDX)
+  const ubyte FOOTER_LINE   = 59
+  str         BLANK_LINE    = " " * 79
+  uword       CURR_TOP_LINE = 1  ; tracks which actual doc line is at TOP_LINE
+
+  sub r() -> ubyte {
+    return txt.get_row()
+  }
+
+  sub c() -> ubyte {
+    return txt.get_column()
+  }
 }
 
 cursor {
@@ -64,7 +72,7 @@ cursor {
      txt.plot(0, view.FOOTER_LINE) ; move cursor to the starting position for writing
      txt.print(view.BLANK_LINE)
      txt.plot(0, view.FOOTER_LINE)
-     txt.print(": ")
+     txt.print(":")
      CMDINPUT:
        void, cmdchar = cbm.GETIN()
        if cmdchar != $0d { ; any character now but <ENTER>
@@ -77,11 +85,12 @@ cursor {
          for i in 0 to strings.length(cmdBuffer) - 1 { 
            cmdBuffer[i] = txt.getchr(2+i, view.FOOTER_LINE)
          }
+         strings.strip(cursor.cmdBuffer)
          return;
        } 
      goto CMDINPUT
-     strings.strip(cursor.cmdBuffer)
   }
+
 }
 
 main {
@@ -91,7 +100,7 @@ main {
     ubyte tabNum    ; 0
     ubyte charset   ; 0 = ISO, 1 = PETSCI
     ubyte startBank ; actual bank number for switching
-    uword firstLine ; address of the first line
+    uword firstLine ; address of the first line of the document
     uword lineCount ; number of lines
     ^^ubyte filepath
     ubyte data00, data01, data02, data03, data04, data05, data06, data07
@@ -129,7 +138,7 @@ main {
   const uword MaxLength  = 80
   const uword LineSize   = sizeof(Line)
 
-  const uword MaxLines   = 400
+  const uword MaxLines   = 375
   const uword BufferSize = MaxLines * LineSize
   uword Buffer           = memory("Buffer", BufferSize, 1)
 
@@ -289,7 +298,7 @@ main {
 
              ; clear command line
              txt.plot(0, view.FOOTER_LINE)
-             txt.print(view.BLANK_LINE)
+             prints(view.BLANK_LINE)
 
              ; parse out file name (everything after ":N")
              str fn1 = " " * 60
@@ -301,6 +310,7 @@ main {
                  load_file(fn1)
                  draw_initial_screen()
                  cursor.place(view.LEFT_MARGIN, view.TOP_LINE)
+                 main.update_tracker()
                  main.MODE = mode.NAV
                 }
                'q' -> {
@@ -310,7 +320,7 @@ main {
              }
           }
         }
-        'k',$91 -> {       ; $6b, UP
+        'k',$91 -> {       ;  UP
           if main.MODE == mode.NAV {
             cursor_up_on_k()
           }
@@ -320,12 +330,12 @@ main {
             cursor_down_on_j()
           }
         }
-        'h',$9d -> {       ; $68, LEFT 
+        'h',$9d -> {       ; LEFT 
           if main.MODE == mode.NAV {
             cursor_left_on_h()
           }
         }
-        'l',$1d -> {       ; $6c, RIGHT 
+        'l',$1d -> {       ; RIGHT 
           if main.MODE == mode.NAV {
             cursor_right_on_l()
           }
@@ -334,54 +344,76 @@ main {
       goto NAVCHARLOOP 
   }
 
-; TODO - enforce boundary conditions
-
-  sub cursor_up_on_k () {
-    view.r = txt.get_row()
-    view.c = txt.get_column()
-    if view.r > view.TOP_LINE {
-      ubyte next_row = view.r-1
-      cursor.place(view.c,next_row)
+  sub cursor_down_on_j () {
+    ubyte curr_line = view.r()
+    ubyte next_line = curr_line+1;
+    if curr_line <  view.BOTTOM_LINE {
+      cursor.place(view.c(),view.r()+1)
     }
+    ;else if view.CURR_TOP_LINE + view.HEIGHT < doc.lineCount {
+    ;  view.CURR_TOP_LINE++ ; update doc line that now is in the TOP_LINE row
+    ;  cursor.place(view.c(),view.r()+1)
+    ;}
+    main.update_tracker()
   }
 
-  sub cursor_down_on_j () {
-    view.r = txt.get_row()
-    view.c = txt.get_column()
-    if view.r <  view.BOTTOM_LINE {
-      ubyte next_row = view.r+1
-      cursor.place(view.c,next_row)
+  sub cursor_up_on_k () {
+    if view.r() > view.TOP_LINE {
+      cursor.place(view.c(),view.r()-1)
     }
+    main.update_tracker()
   }
 
   sub cursor_left_on_h () {
-    view.r = txt.get_row()
-    view.c = txt.get_column()
-    if view.c > view.LEFT_MARGIN {
-      ubyte next_col = view.c-1
-      cursor.place(next_col,view.r)
+    if view.c() > view.LEFT_MARGIN {
+      cursor.place(view.c()-1,view.r())
     }
+    main.update_tracker()
   }
 
   sub cursor_right_on_l () {
-    view.r = txt.get_row()
-    view.c = txt.get_column()
-    if view.c < view.RIGHT_MARGIN {
-      ubyte next_col = view.c+1
-      cursor.place(next_col,view.r)
+    if view.c() < view.RIGHT_MARGIN {
+      cursor.place(view.c()+1,view.r())
     }
+    main.update_tracker()
   }
 
   ; util functions
+
+  sub update_tracker () {
+    ubyte X = view.c()
+    ubyte Y = view.r() 
+    txt.plot(0, view.FOOTER_LINE)
+    prints(view.BLANK_LINE)
+    txt.plot(1, view.FOOTER_LINE)
+    printw(doc.lineCount)
+    prints(" lines, x: ")
+    printw(X)
+    prints(", y: ")
+    printw(Y)
+    txt.plot(X,Y)
+  }
+
+  sub prints (str x) {
+    txt.print(x)
+  }
 
   sub say (str x) {
     txt.print(x)
     txt.nl()
   }
 
+  sub printb (ubyte x) {
+    txt.print_ub(x)
+  }
+
   sub sayb (ubyte x) {
     txt.print_ub(x)
     txt.nl()
+  }
+
+  sub printw (uword x) {
+    txt.print_uw0(x) 
   }
 
   sub sayw (uword x) {
