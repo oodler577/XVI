@@ -191,6 +191,21 @@ main {
       }
   }
 
+  sub draw_screen (uword startingLine) {
+      uword addr = Buffer
+      ubyte i
+      if doc.lineCount > view.BOTTOM_LINE - 1 {
+        i = view.BOTTOM_LINE - 1
+      }
+      txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
+      repeat i {
+        txt.plot(view.LEFT_MARGIN, txt.get_row())
+        ^^Line line = addr
+        say(line.text)
+        addr = line.next
+      }
+  }
+
   sub load_file(str filepath) {
     ubyte i
     strings.strip(filepath)
@@ -344,22 +359,48 @@ main {
       goto NAVCHARLOOP 
   }
 
+  sub incr_top_line() -> uword {
+    if  view.CURR_TOP_LINE < doc.lineCount {
+      view.CURR_TOP_LINE++
+    }
+    return view.CURR_TOP_LINE
+  }
+
+  sub decr_top_line() -> uword {
+    if  view.CURR_TOP_LINE > 1 {
+      view.CURR_TOP_LINE--
+    }
+    return view.CURR_TOP_LINE
+  }
+
   sub cursor_down_on_j () {
     ubyte curr_line = view.r()
+    ubyte curr_col  = view.c()
     ubyte next_line = curr_line+1;
     if curr_line <  view.BOTTOM_LINE {
-      cursor.place(view.c(),view.r()+1)
+      cursor.place(view.c(),next_line)
     }
-    ;else if view.CURR_TOP_LINE + view.HEIGHT < doc.lineCount {
-    ;  view.CURR_TOP_LINE++ ; update doc line that now is in the TOP_LINE row
-    ;  cursor.place(view.c(),view.r()+1)
-    ;}
+    else { ; if view.CURR_TOP_LINE + view.HEIGHT < doc.lineCount {
+      incr_top_line()
+      draw_screen(view.CURR_TOP_LINE)      ; TODO: implement fully
+      ; key cursor at the bottome
+      cursor.place(curr_col, curr_line) ; FIND AND FIX ARTIFACT
+    }
     main.update_tracker()
   }
 
   sub cursor_up_on_k () {
-    if view.r() > view.TOP_LINE {
-      cursor.place(view.c(),view.r()-1)
+    ubyte curr_line = view.r()
+    ubyte curr_col  = view.c()
+    ubyte next_line = curr_line-1;
+    if curr_line > view.TOP_LINE {
+      cursor.place(view.c(),next_line)
+    }
+    else { ; if view.CURR_TOP_LINE + view.HEIGHT < doc.lineCount {
+      decr_top_line()
+      draw_screen(view.CURR_TOP_LINE)      ; TODO: implement fully
+      ; key cursor at the bottome
+      cursor.place(curr_col, curr_line) ; FIND AND FIX ARTIFACT
     }
     main.update_tracker()
   }
@@ -391,6 +432,8 @@ main {
     printw(X - view.LEFT_MARGIN + 1)
     prints(", y: ")
     printw(Y - view.TOP_LINE    + 1)
+    prints(" - top line: ")
+    printw(view.CURR_TOP_LINE)
     txt.plot(X,Y)
   }
 
