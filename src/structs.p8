@@ -18,7 +18,7 @@ mode {
 view {
   const ubyte LEFT_MARGIN   = 3
   const ubyte RIGHT_MARGIN  = 78
-  const ubyte HEIGHT        = 57 ; absolute height of the edit/view area
+  const ubyte HEIGHT        = 56 ; absolute height of the edit/view area
   const ubyte TOP_LINE      = 2  ; row+1 of the first line of the document (FIRST_LINE_IDX)
   const ubyte MIDDLE_LINE   = 27
   const ubyte BOTTOM_LINE   = 57 ; row+1 of the last line of the view port (LAST_LINE_IDX)
@@ -43,9 +43,7 @@ cursor {
     saved_char = txt.getchr(c,r)
   }
 
-  sub save_current_char() {
-    ubyte c = txt.get_column()
-    ubyte r = txt.get_row()
+  sub save_current_char(ubyte c, ubyte r) {
     save_char(c,r)
   }
 
@@ -61,7 +59,7 @@ cursor {
   sub place(ubyte new_c, ubyte new_r) {
     restore_current_char()  ;; restore char in current cursor location
     txt.plot(new_c,new_r)   ;; move cursor to new location
-    save_current_char()     ;; save char in the current location (here, the new c,r)
+    save_current_char(new_c, new_r)     ;; save char in the current location (here, the new c,r)
     txt.chrout(saved_char)  ;; write save char
     txt.setclr(new_c,new_r,$16) ; inverses color
     txt.plot(new_c,new_r)   ;; move cursor back after txt.chrout advances cursor
@@ -191,21 +189,6 @@ main {
       }
   }
 
-  sub draw_screen (uword startingLine) {
-      uword addr = Buffer
-      ubyte i
-      if doc.lineCount > view.BOTTOM_LINE - 1 {
-        i = view.BOTTOM_LINE - 1
-      }
-      txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
-      repeat i {
-        txt.plot(view.LEFT_MARGIN, txt.get_row())
-        ^^Line line = addr
-        say(line.text)
-        addr = line.next
-      }
-  }
-
   sub load_file(str filepath) {
     ubyte i
     strings.strip(filepath)
@@ -216,6 +199,7 @@ main {
     say(doc.filepath)
     sys.wait(20)
     txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
+     doc.lineCount = 0
 
     ubyte tries = 0
     READFILE:
@@ -360,8 +344,8 @@ main {
   }
 
   sub incr_top_line() -> uword {
-    if  view.CURR_TOP_LINE < doc.lineCount {
-      view.CURR_TOP_LINE++
+    if  view.CURR_TOP_LINE + view.HEIGHT <= doc.lineCount {
+      view.CURR_TOP_LINE += 1
     }
     return view.CURR_TOP_LINE
   }
@@ -373,6 +357,25 @@ main {
     return view.CURR_TOP_LINE
   }
 
+  sub draw_screen (uword startingLine) {
+      uword addr = Buffer         ; start address of memory allocation for document
+      repeat startingLine-1 {     ; find starting line, linear search; may need an index
+        ^^Line skip = addr
+        addr = skip.next
+      }
+      txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
+      repeat view.HEIGHT {
+        ubyte row = view.r()
+        ^^Line line = addr
+        addr = line.next
+
+        txt.plot(0, row)
+        say(view.BLANK_LINE)
+        txt.plot(view.LEFT_MARGIN, row)
+        say(line.text)
+      }
+  }
+
   sub cursor_down_on_j () {
     ubyte curr_line = view.r()
     ubyte curr_col  = view.c()
@@ -380,10 +383,10 @@ main {
     if curr_line <  view.BOTTOM_LINE {
       cursor.place(view.c(),next_line)
     }
-    else { ; if view.CURR_TOP_LINE + view.HEIGHT < doc.lineCount {
+    else {
       incr_top_line()
-      draw_screen(view.CURR_TOP_LINE)      ; TODO: implement fully
-      ; key cursor at the bottome
+      draw_screen(view.CURR_TOP_LINE)
+      txt.plot(curr_col, curr_line)
       cursor.place(curr_col, curr_line) ; FIND AND FIX ARTIFACT
     }
     main.update_tracker()
