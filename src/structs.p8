@@ -66,7 +66,7 @@ cursor {
   }
 
   ; the cursor is the underlying character, with the color scheme inverted
-  sub place_bottom(ubyte new_c, ubyte new_r) {
+  sub replace(ubyte new_c, ubyte new_r) {
     save_current_char(new_c, new_r)     ;; save char in the current location (here, the new c,r)
     txt.setclr(new_c,new_r,$16) ; inverses color
     txt.plot(new_c,new_r)   ;; move cursor back after txt.chrout advances cursor
@@ -355,16 +355,16 @@ main {
 
   sub incr_top_line() -> uword {
     if  view.CURR_TOP_LINE + view.HEIGHT <= doc.lineCount {
-      view.CURR_TOP_LINE += 1
+      view.CURR_TOP_LINE++
     }
-    return view.CURR_TOP_LINE
+    return view.CURR_TOP_LINE     ; stops ++'ing with the last HEIGHT lines in the document 
   }
 
   sub decr_top_line() -> uword {
     if  view.CURR_TOP_LINE > 1 {
       view.CURR_TOP_LINE--
     }
-    return view.CURR_TOP_LINE
+    return view.CURR_TOP_LINE     ; returns 1 at the minimum
   }
 
   sub draw_screen (uword startingLine) {
@@ -392,10 +392,10 @@ main {
     ubyte curr_line = view.r()
     ubyte curr_col  = view.c()
     ubyte next_line = curr_line+1;
-    if curr_line ==  view.BOTTOM_LINE {
+    if curr_line == view.BOTTOM_LINE {
       incr_top_line()
-      draw_screen(view.CURR_TOP_LINE)     ; redraw
-      cursor.place_bottom(curr_col, curr_line) ; invert next character that moved up
+      draw_screen(view.CURR_TOP_LINE)
+      cursor.replace(curr_col, curr_line)
     }
     else {
       cursor.place(view.c(), next_line)
@@ -407,14 +407,13 @@ main {
     ubyte curr_line = view.r()
     ubyte curr_col  = view.c()
     ubyte next_line = curr_line-1;
-    if curr_line > view.TOP_LINE {
-      cursor.place(view.c(),next_line)
-    }
-    else { ; if view.CURR_TOP_LINE + view.HEIGHT < doc.lineCount {
+    if curr_line == view.TOP_LINE {
       decr_top_line()
-      draw_screen(view.CURR_TOP_LINE)      ; TODO: implement fully
-      ; key cursor at the bottome
-      cursor.place(curr_col, curr_line) ; FIND AND FIX ARTIFACT
+      draw_screen(view.CURR_TOP_LINE) 
+      cursor.replace(curr_col, curr_line)
+    }
+    else {
+      cursor.place(curr_col,next_line)
     }
     main.update_tracker()
   }
