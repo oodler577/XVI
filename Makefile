@@ -25,44 +25,24 @@ bundle:
 	mkdir ./releases 2> /dev/null || echo -n
 	cp *.zip releases/
 
-run:
-	cd $(PKG) && $(EMU) -scale 2
-
 trace:
 	$(EMU) -scale 2 -prg ./$(PKG) -run -trace
 
-io-test:
-	$(PROG8C) -target $(TARGET) src/file-io-test.p8
-
-iso-test:
-	$(PROG8C) -target $(TARGET) src/iso-test.p8
 
 xvi2:
 	$(PROG8C) -target $(TARGET) src/xvi2.p8
-	mv xvi2.prg dist/xvi2
 
-structs:
-	$(PROG8C) -target $(TARGET) src/structs.p8
-
-runstructs:
-	$(EMU) -debug -scale 2 -prg structs.prg -run -gif demo.gif
+run:
+	$(EMU) -debug -scale 2 -prg xvi2.prg -run -gif demo.gif
 
 sendtox16:
+	# using Flashair ...
 	cp xvi2.prg xvi2
 	curl -F "file=@xvi2" http://192.168.0.1/upload.cgi > /dev/null
-
-run2:
-	$(EMU) -scale 2 -prg ./dist/xvi2 -run
-
-run2demo:
-	$(EMU) -scale 2 -prg ./dist/xvi2 -run -gif demo.gif
-
-run-xvi2-no-scale:
-	$(EMU) -prg ./xvi2.prg -run -debug
 
 debug:
 	$(EMU) -scale 2 -prg ./xvi2.prg -run -debug
 
 clean:
-	rm -fv xvi xvi.prg *.asm 2> /dev/null || echo -n
+	rm -fv xvi xvi.prg xvi2 xvi2.prg *.asm strucst.* 2> /dev/null || echo -n
 	rm -rf ./$(PKG) *.zip 2> /dev/null || echo -n
