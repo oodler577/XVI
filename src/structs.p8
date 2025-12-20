@@ -48,8 +48,8 @@ cursor {
   }
 
   sub restore_current_char() {
-    ubyte c = txt.get_column()
-    ubyte r = txt.get_row()
+    ubyte c = view.c()
+    ubyte r = view.r()
     txt.plot(c,r)
     txt.chrout(saved_char)
     txt.plot(c,r)
@@ -61,6 +61,13 @@ cursor {
     txt.plot(new_c,new_r)   ;; move cursor to new location
     save_current_char(new_c, new_r)     ;; save char in the current location (here, the new c,r)
     txt.chrout(saved_char)  ;; write save char
+    txt.setclr(new_c,new_r,$16) ; inverses color
+    txt.plot(new_c,new_r)   ;; move cursor back after txt.chrout advances cursor
+  }
+
+  ; the cursor is the underlying character, with the color scheme inverted
+  sub place_bottom(ubyte new_c, ubyte new_r) {
+    save_current_char(new_c, new_r)     ;; save char in the current location (here, the new c,r)
     txt.setclr(new_c,new_r,$16) ; inverses color
     txt.plot(new_c,new_r)   ;; move cursor back after txt.chrout advances cursor
   }
@@ -278,9 +285,12 @@ main {
     txt.plot(0,1)
     splash()
 
-    sys.wait(120)
-    ;load_file("b.txt")
-    ;draw_initial_screen()
+    ;sys.wait(120)
+    load_file("sample6.txt")
+    draw_initial_screen()
+    cursor.place(view.LEFT_MARGIN, view.TOP_LINE)
+    main.update_tracker()
+    main.MODE = mode.NAV
 
     ubyte char = 0 
     NAVCHARLOOP:
@@ -363,9 +373,11 @@ main {
         ^^Line skip = addr
         addr = skip.next
       }
+      ubyte c = view.c()
+      ubyte row
       txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
       repeat view.HEIGHT {
-        ubyte row = view.r()
+        row = view.r()
         ^^Line line = addr
         addr = line.next
 
@@ -380,14 +392,13 @@ main {
     ubyte curr_line = view.r()
     ubyte curr_col  = view.c()
     ubyte next_line = curr_line+1;
-    if curr_line <  view.BOTTOM_LINE {
-      cursor.place(view.c(),next_line)
+    if curr_line ==  view.BOTTOM_LINE {
+      incr_top_line()
+      draw_screen(view.CURR_TOP_LINE)     ; redraw
+      cursor.place_bottom(curr_col, curr_line) ; invert next character that moved up
     }
     else {
-      incr_top_line()
-      draw_screen(view.CURR_TOP_LINE)
-      txt.plot(curr_col, curr_line)
-      cursor.place(curr_col, curr_line) ; FIND AND FIX ARTIFACT
+      cursor.place(view.c(), next_line)
     }
     main.update_tracker()
   }
