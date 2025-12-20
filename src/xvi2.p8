@@ -445,8 +445,8 @@ main {
     printw(X - view.LEFT_MARGIN + 1)
     prints(", y: ")
     printw(Y - view.TOP_LINE    + 1)
-    prints(" - top line: ")
-    printw(view.CURR_TOP_LINE)
+    prints(" - max line: ")
+    printw(view.CURR_TOP_LINE+view.HEIGHT-1)
     txt.plot(X,Y)
   }
 
