@@ -55,6 +55,10 @@ cursor {
     txt.plot(c,r)
   }
 
+  sub hide() {
+    restore_current_char()
+  }
+
   ; the cursor is the underlying character, with the color scheme inverted
   sub place(ubyte new_c, ubyte new_r) {
     restore_current_char()  ;; restore char in current cursor location
@@ -77,7 +81,7 @@ cursor {
      txt.plot(0, view.FOOTER_LINE) ; move cursor to the starting position for writing
      txt.print(view.BLANK_LINE)
      txt.plot(0, view.FOOTER_LINE)
-     txt.print(": ")
+     txt.print(":")
      CMDINPUT:
        void, cmdchar = cbm.GETIN()
        if cmdchar != $0d { ; any character now but <ENTER>
@@ -88,7 +92,7 @@ cursor {
          ; processing in the view code
          ubyte i
          for i in 0 to strings.length(cmdBuffer) - 1 { 
-           cmdBuffer[i] = txt.getchr(2+i, view.FOOTER_LINE)
+           cmdBuffer[i] = txt.getchr(1+i, view.FOOTER_LINE)
          }
          strings.strip(cursor.cmdBuffer)
          return;
@@ -289,6 +293,7 @@ main {
     load_file("sample6.txt")
     draw_initial_screen()
     cursor.place(view.LEFT_MARGIN, view.TOP_LINE)
+
     main.update_tracker()
     main.MODE = mode.NAV
 
@@ -311,7 +316,7 @@ main {
 
              ; parse out file name (everything after ":N")
              str fn1 = " " * 60
-             strings.slice(cursor.cmdBuffer, 2, strings.length(cursor.cmdBuffer), fn1)
+             strings.slice(cursor.cmdBuffer, 1, strings.length(cursor.cmdBuffer)-1, fn1)
              strings.strip(fn1)
 
              when cursor.cmdBuffer[0] {
@@ -388,19 +393,30 @@ main {
       }
   }
 
-  sub cursor_down_on_j () {
-    ubyte curr_line = view.r()
-    ubyte curr_col  = view.c()
-    ubyte next_line = curr_line+1;
-    if curr_line == view.BOTTOM_LINE {
-      incr_top_line()
-      draw_screen(view.CURR_TOP_LINE)
-      cursor.replace(curr_col, curr_line)
-    }
-    else {
-      cursor.place(view.c(), next_line)
-    }
-    main.update_tracker()
+  sub draw_bottom_line (uword lineNum) {
+      uword addr = Buffer           ; start address of memory allocation for document
+      repeat lineNum {            ; find starting line, linear search; may need an index
+        ^^Line skip = addr
+        addr = skip.next
+      }
+      ^^Line line = addr
+      addr = line.next
+      txt.plot(0, view.BOTTOM_LINE)
+      say(view.BLANK_LINE)
+      txt.plot(view.LEFT_MARGIN, view.BOTTOM_LINE)
+      say(line.text)
+  }
+
+  sub draw_top_line (uword lineNum) {
+      uword addr = Buffer           ; start address of memory allocation for document
+      repeat lineNum {            ; find starting line, linear search; may need an index
+        ^^Line skip = addr
+        addr = skip.next
+      }
+      ^^Line line = addr
+      addr = line.next
+      txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
+      prints(line.text)
   }
 
   sub cursor_up_on_k () {
@@ -408,12 +424,39 @@ main {
     ubyte curr_col  = view.c()
     ubyte next_line = curr_line-1;
     if curr_line == view.TOP_LINE {
+      cursor.hide()
+      txt.scroll_down()
       decr_top_line()
-      draw_screen(view.CURR_TOP_LINE) 
+      txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
+      draw_top_line(view.CURR_TOP_LINE-1) 
+      txt.plot(0, view.BOTTOM_LINE+1) ; blank footer line
+      prints(view.BLANK_LINE)
       cursor.replace(curr_col, curr_line)
     }
     else {
       cursor.place(curr_col,next_line)
+    }
+    main.update_tracker()
+  }
+
+  sub cursor_down_on_j () {
+    ubyte curr_line = view.r()
+    ubyte curr_col  = view.c()
+    ubyte next_line = curr_line+1;
+    if curr_line == view.BOTTOM_LINE {
+      cursor.hide()
+      incr_top_line()               ; increment CURR_TOP_LINE
+      txt.plot(0, view.FOOTER_LINE) ; blank footer line
+      prints(view.BLANK_LINE)
+      txt.plot(0, 1)    ; blank top line
+      say(view.BLANK_LINE)
+      prints(view.BLANK_LINE)
+      txt.scroll_up()
+      draw_bottom_line(view.CURR_TOP_LINE+view.HEIGHT-1-1)
+      cursor.replace(curr_col, curr_line)
+    }
+    else {
+      cursor.place(view.c(), next_line)
     }
     main.update_tracker()
   }
