@@ -147,7 +147,7 @@ main {
   const uword MaxLength  = 80
   const uword LineSize   = sizeof(Line)
 
-  const uword MaxLines   = 375
+  const uword MaxLines   = 250
   const uword BufferSize = MaxLines * LineSize
   uword Buffer           = memory("Buffer", BufferSize, 1)
 
@@ -334,6 +334,16 @@ main {
              }
           }
         }
+        'g' -> {
+          if main.MODE == mode.NAV {
+           jump_to_begin()
+          }
+        }
+        'G' -> {
+          if main.MODE == mode.NAV {
+           jump_to_end()
+          }
+        }
         'k',$91 -> {       ;  UP
           if main.MODE == mode.NAV {
             cursor_up_on_k()
@@ -394,7 +404,7 @@ main {
   }
 
   sub draw_bottom_line (uword lineNum) {
-      uword addr = Buffer           ; start address of memory allocation for document
+      uword addr = Buffer         ; start address of memory allocation for document
       repeat lineNum {            ; find starting line, linear search; may need an index
         ^^Line skip = addr
         addr = skip.next
@@ -408,7 +418,7 @@ main {
   }
 
   sub draw_top_line (uword lineNum) {
-      uword addr = Buffer           ; start address of memory allocation for document
+      uword addr = Buffer         ; start address of memory allocation for document
       repeat lineNum {            ; find starting line, linear search; may need an index
         ^^Line skip = addr
         addr = skip.next
@@ -419,7 +429,25 @@ main {
       prints(line.text)
   }
 
+  sub jump_to_begin() {
+      ubyte c = view.c()
+      view.CURR_TOP_LINE = 1
+      draw_screen(view.CURR_TOP_LINE) 
+      cursor.replace(c, view.TOP_LINE)
+  }
+
+  sub jump_to_end() {
+      ubyte c = view.c()
+      view.CURR_TOP_LINE = doc.lineCount - view.HEIGHT + 1
+      draw_screen(view.CURR_TOP_LINE) 
+      cursor.replace(c, view.BOTTOM_LINE)
+  }
+
   sub cursor_up_on_k () {
+    ; k (up) from going past line 1
+    if view.CURR_TOP_LINE == 1 and view.r() == view.TOP_LINE {
+      return
+    }
     ubyte curr_line = view.r()
     ubyte curr_col  = view.c()
     ubyte next_line = curr_line-1;
@@ -440,6 +468,10 @@ main {
   }
 
   sub cursor_down_on_j () {
+    ; j (down) from going past doc.lineCount
+    if view.CURR_TOP_LINE == doc.lineCount - view.HEIGHT + 1 and view.r() == view.BOTTOM_LINE {
+      return
+    }
     ubyte curr_line = view.r()
     ubyte curr_col  = view.c()
     ubyte next_line = curr_line+1;
