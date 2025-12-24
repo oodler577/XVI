@@ -210,7 +210,7 @@ main {
     say(doc.filepath)
     sys.wait(20)
     txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
-     doc.lineCount = 0
+    doc.lineCount = 0
 
     ubyte tries = 0
     READFILE:
@@ -297,6 +297,14 @@ main {
     main.update_tracker()
     main.MODE = mode.NAV
 
+; todo:
+; - ctrl+f, ctrl+b
+; - line numbers (:set number/:set no number)
+; - replace mode
+; - insert mode
+; - dd, yy, p, P, o, O
+; - :w filetosave.txt
+
     ubyte char = 0 
     NAVCHARLOOP:
      void, char = cbm.GETIN()
@@ -364,27 +372,37 @@ main {
             cursor_right_on_l()
           }
         }
+        $06,$46 -> {  ; ctrl+f / shift+f
+          if main.MODE == mode.NAV {
+            page_forward()
+          }
+        }
+        $02,$42 -> {  ; ctrl+b / shift+b
+          if main.MODE == mode.NAV {
+            page_backward()
+          }
+        }
       }
       goto NAVCHARLOOP 
   }
 
-  sub incr_top_line() -> uword {
-    if  view.CURR_TOP_LINE + view.HEIGHT <= doc.lineCount {
-      view.CURR_TOP_LINE++
+  sub incr_top_line(uword value) -> uword {
+    if  view.CURR_TOP_LINE + value <= doc.lineCount {
+      view.CURR_TOP_LINE += value
     }
     return view.CURR_TOP_LINE     ; stops ++'ing with the last HEIGHT lines in the document 
   }
 
-  sub decr_top_line() -> uword {
+  sub decr_top_line(uword value) -> uword {
     if  view.CURR_TOP_LINE > 1 {
-      view.CURR_TOP_LINE--
+      view.CURR_TOP_LINE -= value
     }
     return view.CURR_TOP_LINE     ; returns 1 at the minimum
   }
 
-  sub draw_screen (uword startingLine) {
-      uword addr = Buffer         ; start address of memory allocation for document
-      repeat startingLine-1 {     ; find starting line, linear search; may need an index
+  sub draw_screen () {               ; NOTE: assumes view.CURR_TOP_LINE is correct
+      uword addr = Buffer            ; start address of memory allocation for document
+      repeat view.CURR_TOP_LINE-1 {  ; find starting line, linear search; may need an index
         ^^Line skip = addr
         addr = skip.next
       }
@@ -429,18 +447,48 @@ main {
       prints(line.text)
   }
 
+  sub page_forward() {
+      ubyte c = view.c()
+      uword last_page_start = doc.lineCount - view.HEIGHT + 1
+      if view.CURR_TOP_LINE + view.HEIGHT < last_page_start {
+        incr_top_line(view.HEIGHT) ; increment view.CURR_TOP_LINE
+      }
+      else {
+        view.CURR_TOP_LINE = last_page_start
+      }
+      draw_screen() 
+      cursor.replace(c, view.BOTTOM_LINE)
+      main.update_tracker()
+  }
+
+; still issue with bounds in some cases
+  sub page_backward() {
+      ubyte c = view.c()
+      if view.CURR_TOP_LINE - view.HEIGHT + 1 > 1 {
+        decr_top_line(view.HEIGHT)  ; decrement view.CURR_TOP_LINE
+      }
+      else {
+        view.CURR_TOP_LINE = 1 
+      }
+      draw_screen() 
+      cursor.replace(c, view.TOP_LINE)
+      main.update_tracker()
+  }
+
   sub jump_to_begin() {
       ubyte c = view.c()
       view.CURR_TOP_LINE = 1
-      draw_screen(view.CURR_TOP_LINE) 
+      draw_screen() 
       cursor.replace(c, view.TOP_LINE)
+      main.update_tracker()
   }
 
   sub jump_to_end() {
       ubyte c = view.c()
       view.CURR_TOP_LINE = doc.lineCount - view.HEIGHT + 1
-      draw_screen(view.CURR_TOP_LINE) 
+      draw_screen() 
       cursor.replace(c, view.BOTTOM_LINE)
+      main.update_tracker()
   }
 
   sub cursor_up_on_k () {
@@ -454,7 +502,7 @@ main {
     if curr_line == view.TOP_LINE {
       cursor.hide()
       txt.scroll_down()
-      decr_top_line()
+      decr_top_line(1)
       txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
       draw_top_line(view.CURR_TOP_LINE-1) 
       txt.plot(0, view.BOTTOM_LINE+1) ; blank footer line
@@ -477,7 +525,7 @@ main {
     ubyte next_line = curr_line+1;
     if curr_line == view.BOTTOM_LINE {
       cursor.hide()
-      incr_top_line()               ; increment CURR_TOP_LINE
+      incr_top_line(1)               ; increment CURR_TOP_LINE
       txt.plot(0, view.FOOTER_LINE) ; blank footer line
       prints(view.BLANK_LINE)
       txt.plot(0, 1)    ; blank top line
@@ -520,7 +568,9 @@ main {
     printw(X - view.LEFT_MARGIN + 1)
     prints(", y: ")
     printw(Y - view.TOP_LINE    + 1)
-    prints(" - max line: ")
+    prints(" - TOP: ")
+    printw(view.CURR_TOP_LINE)
+    prints(" - BOT: ")
     printw(view.CURR_TOP_LINE+view.HEIGHT-1)
     txt.plot(X,Y)
   }
