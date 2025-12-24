@@ -394,7 +394,7 @@ main {
   }
 
   sub decr_top_line(uword value) -> uword {
-    if  view.CURR_TOP_LINE > 1 {
+    if  view.CURR_TOP_LINE - value >= 1 {
       view.CURR_TOP_LINE -= value
     }
     return view.CURR_TOP_LINE     ; returns 1 at the minimum
@@ -451,7 +451,7 @@ main {
       ubyte c = view.c()
       uword last_page_start = doc.lineCount - view.HEIGHT + 1
       if view.CURR_TOP_LINE + view.HEIGHT < last_page_start {
-        incr_top_line(view.HEIGHT) ; increment view.CURR_TOP_LINE
+        incr_top_line(view.HEIGHT)
       }
       else {
         view.CURR_TOP_LINE = last_page_start
@@ -461,14 +461,13 @@ main {
       main.update_tracker()
   }
 
-; still issue with bounds in some cases
   sub page_backward() {
       ubyte c = view.c()
-      if view.CURR_TOP_LINE - view.HEIGHT + 1 > 1 {
-        decr_top_line(view.HEIGHT)  ; decrement view.CURR_TOP_LINE
+      if view.CURR_TOP_LINE > view.HEIGHT {
+        view.CURR_TOP_LINE = view.CURR_TOP_LINE - view.HEIGHT; 
       }
       else {
-        view.CURR_TOP_LINE = 1 
+        view.CURR_TOP_LINE = 1
       }
       draw_screen() 
       cursor.replace(c, view.TOP_LINE)
