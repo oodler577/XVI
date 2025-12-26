@@ -16,8 +16,8 @@ mode {
 }
 
 view {
-  const ubyte LEFT_MARGIN   = 3
-  const ubyte RIGHT_MARGIN  = 78
+  const ubyte LEFT_MARGIN   = 4
+  const ubyte RIGHT_MARGIN  = 79
   const ubyte HEIGHT        = 56 ; absolute height of the edit/view area
   const ubyte TOP_LINE      = 2  ; row+1 of the first line of the document (FIRST_LINE_IDX)
   const ubyte MIDDLE_LINE   = 27
@@ -25,6 +25,7 @@ view {
   const ubyte FOOTER_LINE   = 59
   str         BLANK_LINE    = " " * 79
   uword       CURR_TOP_LINE = 1  ; tracks which actual doc line is at TOP_LINE
+  uword[main.MaxLines]  INDEX         = [0000]*main.MaxLines ; Line to address look up
 
   sub r() -> ubyte {
     return txt.get_row()
@@ -147,7 +148,7 @@ main {
   const uword MaxLength  = 80
   const uword LineSize   = sizeof(Line)
 
-  const uword MaxLines   = 250
+  const uword MaxLines   = 256
   const uword BufferSize = MaxLines * LineSize
   uword Buffer           = memory("Buffer", BufferSize, 1)
 
@@ -185,21 +186,6 @@ main {
     sys.memset(next, BufferSize, 0)
   }
 
-  sub draw_initial_screen () {
-      uword addr = Buffer
-      ubyte i
-      if doc.lineCount > view.BOTTOM_LINE - 1 {
-        i = view.BOTTOM_LINE - 1
-      }
-      txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
-      repeat i {
-        txt.plot(view.LEFT_MARGIN, txt.get_row())
-        ^^Line line = addr
-        say(line.text)
-        addr = line.next
-      }
-  }
-
   sub load_file(str filepath) {
     ubyte i
     strings.strip(filepath)
@@ -213,6 +199,7 @@ main {
     doc.lineCount = 0
 
     ubyte tries = 0
+    ubyte idx   = 0
     READFILE:
     cbm.CLEARST() ; set so READST() is initially known to be clear
     if diskio.f_open(filepath) {
@@ -229,6 +216,8 @@ main {
           strings.copy(tmp, lineBuffer)
         } 
         uword lineAddr = allocLine(lineBuffer)
+        view.INDEX[idx] = lineAddr
+        idx++
         doc.lineCount++
       }
       diskio.f_close()
@@ -298,8 +287,6 @@ main {
     main.MODE = mode.NAV
 
 ; todo:
-; - ctrl+f, ctrl+b
-; - line numbers (:set number/:set no number)
 ; - replace mode
 ; - insert mode
 ; - dd, yy, p, P, o, O
@@ -342,6 +329,41 @@ main {
              }
           }
         }
+        'd' -> {
+           DDLOOP:
+           void, char = cbm.GETIN()
+; DD is a work in progress!
+           when char {
+             'd' -> {
+                ubyte curr_col = view.c()
+                ubyte curr_row = view.r()
+
+                ubyte curr_line = view.CURR_TOP_LINE as ubyte + view.r() - view.TOP_LINE
+                ^^Line curr_addr = view.INDEX[curr_line - 1]
+                ^^Line prev_addr = curr_addr.prev 
+                ^^Line next_addr = curr_addr.next
+
+                ; short circuit curr_line
+                prev_addr.next = next_addr
+                next_addr.prev = prev_addr
+
+                ; delete from array by shifting up
+                uword i
+                for i in curr_line to doc.lineCount {
+                  ubyte line = i as ubyte
+                  view.INDEX[line - 1] = view.INDEX[line - 2]
+                }
+                doc.lineCount -= 1 ; reduce lineCount by 1
+
+                draw_screen()
+                cursor.replace(curr_col, curr_row)
+                main.update_tracker()
+                goto NAVCHARLOOP 
+             }
+           }
+           goto DDLOOP
+        }
+        ; N A V I G A T I O N
         'g' -> {
           if main.MODE == mode.NAV {
            jump_to_begin()
@@ -400,12 +422,24 @@ main {
     return view.CURR_TOP_LINE     ; returns 1 at the minimum
   }
 
-  sub draw_screen () {               ; NOTE: assumes view.CURR_TOP_LINE is correct
-      uword addr = Buffer            ; start address of memory allocation for document
-      repeat view.CURR_TOP_LINE-1 {  ; find starting line, linear search; may need an index
-        ^^Line skip = addr
-        addr = skip.next
+  sub draw_initial_screen () {
+      uword addr = view.INDEX[0]
+      ubyte i
+      if doc.lineCount > view.BOTTOM_LINE - 1 {
+        i = view.BOTTOM_LINE - 1
       }
+      txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
+      repeat i {
+        txt.plot(view.LEFT_MARGIN, txt.get_row())
+        ^^Line line = addr
+        say(line.text)
+        addr = line.next
+      }
+  }
+
+  sub draw_screen () {               ; NOTE: assumes view.CURR_TOP_LINE is correct
+      ubyte idx = view.CURR_TOP_LINE as ubyte - 1
+      uword addr = view.INDEX[idx]
       ubyte c = view.c()
       ubyte row
       txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
@@ -422,11 +456,8 @@ main {
   }
 
   sub draw_bottom_line (uword lineNum) {
-      uword addr = Buffer         ; start address of memory allocation for document
-      repeat lineNum {            ; find starting line, linear search; may need an index
-        ^^Line skip = addr
-        addr = skip.next
-      }
+      ubyte idx = lineNum as ubyte - 1
+      uword addr = view.INDEX[idx]
       ^^Line line = addr
       addr = line.next
       txt.plot(0, view.BOTTOM_LINE)
@@ -436,11 +467,8 @@ main {
   }
 
   sub draw_top_line (uword lineNum) {
-      uword addr = Buffer         ; start address of memory allocation for document
-      repeat lineNum {            ; find starting line, linear search; may need an index
-        ^^Line skip = addr
-        addr = skip.next
-      }
+      ubyte idx = lineNum as ubyte - 1
+      uword addr = view.INDEX[idx]
       ^^Line line = addr
       addr = line.next
       txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
@@ -556,6 +584,9 @@ main {
 
   ; util functions
 
+; TODO - fix memory violations happening bc of numbering
+; :set number (default), :set nonumber
+
   sub update_tracker () {
     ubyte X = view.c()
     ubyte Y = view.r() 
@@ -571,6 +602,18 @@ main {
     printw(view.CURR_TOP_LINE)
     prints(" - BOT: ")
     printw(view.CURR_TOP_LINE+view.HEIGHT-1)
+
+    ubyte i = 0
+    uword j = 0
+    if Y == view.TOP_LINE or Y == view.BOTTOM_LINE {
+      repeat view.HEIGHT {
+        txt.plot(0,view.TOP_LINE+i)
+        printW(view.CURR_TOP_LINE+j)
+        i += 1
+        j += 1
+      }
+    }
+
     txt.plot(X,Y)
   }
 
@@ -583,26 +626,11 @@ main {
     txt.nl()
   }
 
-  sub printb (ubyte x) {
-    txt.print_ub(x)
-  }
-
-  sub sayb (ubyte x) {
-    txt.print_ub(x)
-    txt.nl()
-  }
-
   sub printw (uword x) {
     txt.print_uw0(x) 
   }
 
-  sub sayw (uword x) {
-    txt.print_uw0(x) 
-    txt.nl()
-  }
-
-  sub sayhex (uword x) {
-    txt.print_uwhex(x, true) 
-    txt.nl()
+  sub printW (uword x) {
+    txt.print_uw(x) 
   }
 }
