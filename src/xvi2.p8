@@ -9,23 +9,23 @@
 %import diskio
 
 mode {
-  const ubyte NAV           = 1  ; modal state for navigation, default state
-  const ubyte INSERT        = 2  ; modal state for insert mode, triggered with ctrl-i
-  const ubyte REPLACE       = 3  ; modal state for replacement mode, triggered with ctrl-r
-  const ubyte COMMAND       = 4  ; modal state for entering a 
+  const ubyte NAV            = 1  ; modal state for navigation, default state
+  const ubyte INSERT         = 2  ; modal state for insert mode, triggered with ctrl-i
+  const ubyte REPLACE        = 3  ; modal state for replacement mode, triggered with ctrl-r
+  const ubyte COMMAND        = 4  ; modal state for entering a 
 }
 
 view {
-  const ubyte LEFT_MARGIN   = 4
-  const ubyte RIGHT_MARGIN  = 79
-  const ubyte HEIGHT        = 56 ; absolute height of the edit/view area
-  const ubyte TOP_LINE      = 2  ; row+1 of the first line of the document (FIRST_LINE_IDX)
-  const ubyte MIDDLE_LINE   = 27
-  const ubyte BOTTOM_LINE   = 57 ; row+1 of the last line of the view port (LAST_LINE_IDX)
-  const ubyte FOOTER_LINE   = 59
-  str         BLANK_LINE    = " " * 79
-  uword       CURR_TOP_LINE = 1  ; tracks which actual doc line is at TOP_LINE
-  uword[main.MaxLines]  INDEX         = [0000]*main.MaxLines ; Line to address look up
+  const ubyte LEFT_MARGIN    = 4
+  const ubyte RIGHT_MARGIN   = 79
+  const ubyte HEIGHT         = 56 ; absolute height of the edit/view area
+  const ubyte TOP_LINE       = 2  ; row+1 of the first line of the document (FIRST_LINE_IDX)
+  const ubyte MIDDLE_LINE    = 27
+  const ubyte BOTTOM_LINE    = 57 ; row+1 of the last line of the view port (LAST_LINE_IDX)
+  const ubyte FOOTER_LINE    = 59
+  str         BLANK_LINE     = " " * 79
+  uword       CURR_TOP_LINE  = 1  ; tracks which actual doc line is at TOP_LINE
+  uword[main.MaxLines] INDEX = [0]*256 ; Line to address look up
 
   sub r() -> ubyte {
     return txt.get_row()
@@ -148,7 +148,7 @@ main {
   const uword MaxLength  = 80
   const uword LineSize   = sizeof(Line)
 
-  const uword MaxLines   = 256
+  const uword MaxLines   = 256 
   const uword BufferSize = MaxLines * LineSize
   uword Buffer           = memory("Buffer", BufferSize, 1)
 
@@ -216,8 +216,8 @@ main {
           strings.copy(tmp, lineBuffer)
         } 
         uword lineAddr = allocLine(lineBuffer)
+        idx = doc.lineCount as ubyte
         view.INDEX[idx] = lineAddr
-        idx++
         doc.lineCount++
       }
       diskio.f_close()
@@ -330,38 +330,26 @@ main {
           }
         }
         'd' -> {
-           DDLOOP:
-           void, char = cbm.GETIN()
-; DD is a work in progress!
-           when char {
-             'd' -> {
-                ubyte curr_col = view.c()
-                ubyte curr_row = view.r()
-
-                ubyte curr_line = view.CURR_TOP_LINE as ubyte + view.r() - view.TOP_LINE
-                ^^Line curr_addr = view.INDEX[curr_line - 1]
-                ^^Line prev_addr = curr_addr.prev 
-                ^^Line next_addr = curr_addr.next
-
-                ; short circuit curr_line
-                prev_addr.next = next_addr
-                next_addr.prev = prev_addr
-
-                ; delete from array by shifting up
-                uword i
-                for i in curr_line to doc.lineCount {
-                  ubyte line = i as ubyte
-                  view.INDEX[line - 1] = view.INDEX[line - 2]
-                }
-                doc.lineCount -= 1 ; reduce lineCount by 1
-
-                draw_screen()
-                cursor.replace(curr_col, curr_row)
-                main.update_tracker()
+          if main.MODE == mode.NAV {
+            DDLOOP:
+            void, char = cbm.GETIN()
+            when char {
+              $1b -> {       ; ESC key, throw into NAV mode from any other mode
+                main.MODE = mode.NAV
                 goto NAVCHARLOOP 
-             }
-           }
-           goto DDLOOP
+              }
+              'd' -> {
+                main.do_dd()
+                goto NAVCHARLOOP 
+              }
+            }
+            goto DDLOOP
+          }
+        }
+        'o' -> {
+          if main.MODE == mode.NAV {
+            main.insert_line_below()
+          }
         }
         ; N A V I G A T I O N
         'g' -> {
@@ -406,6 +394,87 @@ main {
         }
       }
       goto NAVCHARLOOP 
+  }
+
+  sub get_line_num(ubyte r) -> uword {
+    uword row       = mkword(00,r)
+    uword top       = mkword(00,view.TOP_LINE)
+    uword curr_line = view.CURR_TOP_LINE + row - top
+    return curr_line
+  }
+
+  sub get_Line_addr(ubyte r) -> ^^Line {
+    uword curr_line = main.get_line_num(r)
+    ubyte idx = curr_line as ubyte
+    ^^Line curr_addr = view.INDEX[idx - 1]
+    return curr_addr
+  }
+
+  sub insert_line_below() {
+    ubyte c = view.c()
+    ubyte r = view.r()
+
+    uword curr_line = main.get_line_num(r)
+
+    ^^Line curr_addr = get_Line_addr(r)
+    ^^Line new_next  = main.allocLine(view.BLANK_LINE)
+    ^^Line next_addr = curr_addr.next
+
+    ; inserts new line
+    curr_addr.next = new_next
+    new_next.next  = next_addr
+
+    doc.lineCount  += 1 ; increase lineCount by 1
+
+    ; insert entry into array by shifting down
+    uword i
+    for i in doc.lineCount-1 downto curr_line+1 step -1 {
+      ubyte idx = i as ubyte
+      view.INDEX[idx] = view.INDEX[idx-1]
+    }
+
+    idx = curr_line as ubyte - 2
+    view.INDEX[idx] = new_next
+
+    draw_screen()
+    cursor.replace(c, r)
+    main.update_tracker()
+  }
+
+  sub do_dd() {
+    ubyte c = view.c()
+    ubyte r = view.r()
+
+    uword curr_line = main.get_line_num(r)
+
+    ^^Line curr_addr = get_Line_addr(r)
+    ^^Line prev_addr = curr_addr.prev 
+    ^^Line next_addr = curr_addr.next
+
+    ; short circuit curr_line out of links
+    prev_addr.next = next_addr
+    next_addr.prev = prev_addr
+
+    ; delete from array by shifting up
+    uword i
+    for i in curr_line-1 to doc.lineCount-1 {
+      ubyte iidx = i as ubyte
+      view.INDEX[iidx] = view.INDEX[iidx + 1]
+    }
+
+    doc.lineCount  -= 1 ; reduce lineCount by 1
+
+    if curr_line + view.HEIGHT >= doc.lineCount {
+      txt.scroll_up()
+    }
+    else {
+      draw_screen()
+    }
+
+    txt.plot(c, r)
+
+    cursor.replace(c, r)
+    main.update_tracker()
   }
 
   sub incr_top_line(uword value) -> uword {
@@ -584,7 +653,7 @@ main {
 
   ; util functions
 
-; TODO - fix memory violations happening bc of numbering
+; TODO -
 ; :set number (default), :set nonumber
 
   sub update_tracker () {
@@ -603,15 +672,15 @@ main {
     prints(" - BOT: ")
     printw(view.CURR_TOP_LINE+view.HEIGHT-1)
 
+    ; add line numbers
     ubyte i = 0
     uword j = 0
-    if Y == view.TOP_LINE or Y == view.BOTTOM_LINE {
-      repeat view.HEIGHT {
-        txt.plot(0,view.TOP_LINE+i)
-        printW(view.CURR_TOP_LINE+j)
-        i += 1
-        j += 1
-      }
+    
+    repeat view.HEIGHT {
+      txt.plot(0,view.TOP_LINE+i)
+      printW(view.CURR_TOP_LINE+j)
+      i += 1
+      j += 1
     }
 
     txt.plot(X,Y)
