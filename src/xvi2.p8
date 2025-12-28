@@ -418,23 +418,24 @@ main {
 
     ^^Line curr_addr = get_Line_addr(r)
     ^^Line new_next  = main.allocLine(view.BLANK_LINE)
-    ^^Line next_addr = curr_addr.next
+    ^^Line old_next  = curr_addr.next
 
     ; inserts new line
     curr_addr.next = new_next
-    new_next.next  = next_addr
+    new_next.next  = old_next 
 
-    doc.lineCount  += 1 ; increase lineCount by 1
+    new_next.prev  = curr_addr
+    old_next.prev  = new_next
 
-    ; insert entry into array by shifting down
+    doc.lineCount  += 1
+
+    ; delete from array by shifting up
     uword i
-    for i in doc.lineCount-1 downto curr_line+1 step -1 {
+    for i in doc.lineCount downto curr_line {
       ubyte idx = i as ubyte
-      view.INDEX[idx] = view.INDEX[idx-1]
+      idx -= 1
+      view.INDEX[idx] = view.INDEX[idx - 1]
     }
-
-    idx = curr_line as ubyte - 2
-    view.INDEX[idx] = new_next
 
     draw_screen()
     cursor.replace(c, r)
@@ -458,8 +459,8 @@ main {
     ; delete from array by shifting up
     uword i
     for i in curr_line-1 to doc.lineCount-1 {
-      ubyte iidx = i as ubyte
-      view.INDEX[iidx] = view.INDEX[iidx + 1]
+      ubyte idx = i as ubyte
+      view.INDEX[idx] = view.INDEX[idx + 1]
     }
 
     doc.lineCount  -= 1 ; reduce lineCount by 1
