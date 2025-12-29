@@ -1,6 +1,6 @@
 # --- config ---
 JAVA	?= java
-JAR	?= prog8c-12.0-BETA5-all.jar
+JAR	?= prog8c-12.0.1-all.jar
 PROG8C	:= $(JAVA) -jar $(JAR)
 
 TARGET  ?= cx16

@@ -36,16 +36,25 @@ view {
     return txt.get_column()
   }
 
-  sub insert_item_after (uword curr_line, uword lineCount) -> uword {
-    uword next_line = curr_line + 1
-    uword newLineCount = lineCount + 1
+  ; this function does not increment doc.lineCount, but returns the uword that
+  ; should be assigned to it
+  sub insert_line_after (uword new_addr, uword curr_line, uword lineCount) -> uword {
+    uword next_line    = curr_line + 1    ; next line number
+    uword newLineCount = lineCount + 1    ; new line count
+    uword new_idx      = next_line - 1    ; array index in view.INDEX to put the new line addres
+    uword last_idx     = newLineCount - 1 ; idx of the last line in the document
 
-; this is not working yet !
     uword i
-    for i in newLineCount downto next_line+1 {
+    ; Note: the range decrements by 1 from last_idx to the idx right before new_idx,
+    ; which is new_idx+1, since we're decrementing; ensures old contents in new_idx
+    ; get copied into the slot 'below' it ...
+    for i in last_idx downto new_idx+1 step -1 {
       ubyte idx = (i as ubyte) - 1
-      view.INDEX[idx] = view.INDEX[idx - 1]
+      view.INDEX[idx] = view.INDEX[idx-1]
     }
+
+    ; finally, insert new address into the new_idx slot 
+    view.INDEX[new_idx as ubyte] = new_addr 
 
     return newLineCount
   }
@@ -105,7 +114,7 @@ cursor {
   sub command_prompt () {
      ubyte cmdchar
      txt.plot(0, view.FOOTER_LINE) ; move cursor to the starting position for writing
-     txt.print(view.BLANK_LINE)
+     main.prints(view.BLANK_LINE)
      txt.plot(0, view.FOOTER_LINE)
      txt.print(":")
      CMDINPUT:
@@ -256,7 +265,7 @@ main {
       }
       else {
         txt.plot(0, view.BOTTOM_LINE)
-        say(view.BLANK_LINE)
+        prints(view.BLANK_LINE)
         txt.plot(view.LEFT_MARGIN, view.BOTTOM_LINE)
         txt.print("can't open file after 15 attempts ...")
         sys.wait(120)
@@ -319,7 +328,7 @@ main {
 
     ubyte char = 0 
     NAVCHARLOOP:
-     void, char = cbm.GETIN()
+      void, char = cbm.GETIN()
       when char {
         $1b -> {       ; ESC key, throw into NAV mode from any other mode
           main.MODE = mode.NAV
@@ -430,8 +439,8 @@ main {
 
   sub get_Line_addr(ubyte r) -> ^^Line {
     uword curr_line = main.get_line_num(r)
-    ubyte idx = curr_line as ubyte
-    ^^Line curr_addr = view.INDEX[idx - 1]
+    ubyte idx = (curr_line as ubyte) - 1
+    ^^Line curr_addr = view.INDEX[idx]
     return curr_addr
   }
 
@@ -439,23 +448,21 @@ main {
     ubyte c = view.c()
     ubyte r = view.r()
 
-    uword curr_line = main.get_line_num(r)
+    ;uword curr_line  = main.get_line_num(r); xx REDUNDANT xx 
 
-    ^^Line curr_addr = get_Line_addr(r)
-    ^^Line new_next  = main.allocLine(view.BLANK_LINE)
-    ^^Line old_next  = curr_addr.next
+    ^^Line curr_addr = get_Line_addr(r)                ; gets memory addr of current Line
+    ^^Line new_next  = main.allocLine(view.BLANK_LINE) ; creates new Line
 
-    ; inserts new line
+    new_next.next  = curr_addr.next 
     curr_addr.next = new_next
-    new_next.next  = old_next 
 
-    new_next.prev  = curr_addr
-    old_next.prev  = new_next
+    ;doc.lineCount  = view.insert_line_after(new_next, curr_line, doc.lineCount) ; call to update INDEX
+    ;doc.lineCount++
 
-    doc.lineCount  = view.insert_item_after(curr_line, doc.lineCount)
+    draw_initial_screen()     ; should be draw_screen(), but this is a much simpler function to debug with
+    txt.plot(c,r+1)
 
-    draw_screen()
-    cursor.replace(c, r)
+    cursor.replace(c, r+1)
     main.update_tracker()
   }
 
@@ -503,12 +510,13 @@ main {
 
   sub draw_initial_screen () {
       uword addr = view.INDEX[0]
-      ubyte i
-      if doc.lineCount > view.BOTTOM_LINE - 1 {
-        i = view.BOTTOM_LINE - 1
+      ubyte i = doc.lineCount as ubyte ; won't be used if > view.HEIGHT
+      ; catch docs that go beyond screen
+      if doc.lineCount > view.HEIGHT {
+        i = view.HEIGHT
       }
       txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
-      ubyte row = view.r()
+      ubyte row = view.TOP_LINE
       uword lineNum = 1
       repeat i {
         txt.plot(0, row)
@@ -544,7 +552,7 @@ main {
       repeat m {
         row = view.r()
         txt.plot(0, row)
-        say(view.BLANK_LINE)
+        prints(view.BLANK_LINE)
         txt.plot(0, row)
         printLineNum(lineNum)
         txt.plot(view.LEFT_MARGIN, row)
@@ -560,23 +568,33 @@ main {
   }
 
   sub draw_bottom_line (uword lineNum) {
+      if lineNum > doc.lineCount {
+        return
+      }
       ubyte idx = lineNum as ubyte - 1
       uword addr = view.INDEX[idx]
       ^^Line line = addr
       addr = line.next
       txt.plot(0, view.BOTTOM_LINE)
-      say(view.BLANK_LINE)
+      prints(view.BLANK_LINE)
+      txt.plot(0, view.BOTTOM_LINE)
+      printLineNum(lineNum)
       txt.plot(view.LEFT_MARGIN, view.BOTTOM_LINE)
       say(line.text)
   }
 
   sub draw_top_line (uword lineNum) {
+      if lineNum < 1 {
+        return
+      }
       ubyte idx = lineNum as ubyte - 1
       uword addr = view.INDEX[idx]
       ^^Line line = addr
       addr = line.next
       txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
       prints(line.text)
+      txt.plot(0, view.TOP_LINE)
+      printLineNum(lineNum)
   }
 
   sub page_forward() {
@@ -608,17 +626,24 @@ main {
 
   sub jump_to_begin() {
       ubyte c = view.c()
-      view.CURR_TOP_LINE = 1
-      draw_screen() 
+      if doc.lineCount > view.HEIGHT {
+        view.CURR_TOP_LINE = 1
+        draw_screen() 
+      }
       cursor.replace(c, view.TOP_LINE)
       main.update_tracker()
   }
 
   sub jump_to_end() {
       ubyte c = view.c()
-      view.CURR_TOP_LINE = doc.lineCount - view.HEIGHT + 1
-      draw_screen() 
-      cursor.replace(c, view.BOTTOM_LINE)
+      if doc.lineCount > view.HEIGHT {
+        view.CURR_TOP_LINE = doc.lineCount - view.HEIGHT + 1
+        draw_screen() 
+        cursor.replace(c, view.BOTTOM_LINE)
+      }
+      else {
+        cursor.place(c, (doc.lineCount as ubyte) + 1)
+      }
       main.update_tracker()
   }
 
@@ -635,7 +660,7 @@ main {
       txt.scroll_down()
       decr_top_line(1)
       txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
-      draw_top_line(view.CURR_TOP_LINE-1) 
+      draw_top_line(view.CURR_TOP_LINE) 
       txt.plot(0, view.BOTTOM_LINE+1) ; blank footer line
       prints(view.BLANK_LINE)
       cursor.replace(curr_col, curr_line)
@@ -663,10 +688,10 @@ main {
       say(view.BLANK_LINE)
       prints(view.BLANK_LINE)
       txt.scroll_up()
-      draw_bottom_line(view.CURR_TOP_LINE+view.HEIGHT-1-1)
+      draw_bottom_line(view.CURR_TOP_LINE+view.HEIGHT-1)
       cursor.replace(curr_col, curr_line)
     }
-    else {
+    else if next_line < doc.lineCount+view.TOP_LINE {
       cursor.place(view.c(), next_line)
     }
     main.update_tracker()
