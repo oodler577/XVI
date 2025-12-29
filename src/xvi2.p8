@@ -7,6 +7,7 @@
 %import conv
 %import syslib
 %import diskio
+%import debug
 
 mode {
   const ubyte NAV             = 1  ; modal state for navigation, default state
@@ -25,8 +26,16 @@ view {
   const ubyte FOOTER_LINE     = 59
   str         BLANK_LINE      = " " * 79
   uword       CURR_TOP_LINE   = 1  ; tracks which actual doc line is at TOP_LINE
-  uword[main.MaxLines] INDEX  = [0]*256 ; Line to address look up
-  uword[main.MaxLines] INDEX2 = [0]*256 ; Line to address look up
+  uword[main.MaxLines] INDEX  ; Line to address look up
+  ubyte FREEIDX               = 0
+  uword[main.MaxLines] FREE   ; freed addresses to reuse 
+
+  sub push_freed (uword addr) -> ubyte {
+    view.FREE[view.FREEIDX] = addr
+    ubyte addr_idx = view.FREEIDX
+    view.FREEIDX++
+    return addr_idx 
+  }
 
   sub r() -> ubyte {
     return txt.get_row()
@@ -323,13 +332,23 @@ main {
 ; todo:
 ; - replace mode
 ; - insert mode
-; - dd, yy, p, P, o, O
+; - yy, p, P, O
 ; - :w filetosave.txt
+
+; doing:
+; - dd, o
 
     ubyte char = 0 
     NAVCHARLOOP:
       void, char = cbm.GETIN()
       when char {
+        $0c -> {
+          view.CURR_TOP_LINE = 1
+          draw_initial_screen()
+          cursor.replace(view.LEFT_MARGIN, view.TOP_LINE)
+          main.update_tracker()
+          main.MODE = mode.NAV
+        }
         $1b -> {       ; ESC key, throw into NAV mode from any other mode
           main.MODE = mode.NAV
         }
@@ -437,27 +456,41 @@ main {
     return curr_line
   }
 
-  sub get_Line_addr(ubyte r) -> ^^Line {
+  sub get_Line_addr_NO_INDEX(ubyte r) -> uword {
     uword curr_line = main.get_line_num(r)
     ubyte idx = (curr_line as ubyte) - 1
-    ^^Line curr_addr = view.INDEX[idx]
+    ^^Line curr_addr = Buffer ; line #1
+    uword i
+    for i in 2 to curr_line {
+      curr_addr = curr_addr.next
+    }
     return curr_addr
+  }
+
+  sub get_Line_addr(ubyte r) -> uword {
+    uword curr_line = main.get_line_num(r)
+    ubyte idx = (curr_line as ubyte) - 1
+    return view.INDEX[idx]
   }
 
   sub insert_line_below() {
     ubyte c = view.c()
     ubyte r = view.r()
 
-    ;uword curr_line  = main.get_line_num(r); xx REDUNDANT xx 
-
-    ^^Line curr_addr = get_Line_addr(r)                ; gets memory addr of current Line
+    ^^Line curr_addr = get_Line_addr_NO_INDEX(r)                ; gets memory addr of current Line
     ^^Line new_next  = main.allocLine(view.BLANK_LINE) ; creates new Line
+
+debug.assert(curr_addr, new_next, debug.NE, "curr_addr != new_next")
 
     new_next.next  = curr_addr.next 
     curr_addr.next = new_next
 
-    ;doc.lineCount  = view.insert_line_after(new_next, curr_line, doc.lineCount) ; call to update INDEX
-    ;doc.lineCount++
+  ;-- TMP naive update INDEX and lineCount
+    ;; call to update INDEX
+    ;doc.lineCount  = view.insert_line_after(new_next, curr_line, doc.lineCount)
+
+    doc.lineCount++
+  ;-- TMP naive update
 
     draw_initial_screen()     ; should be draw_screen(), but this is a much simpler function to debug with
     txt.plot(c,r+1)
@@ -466,25 +499,27 @@ main {
     main.update_tracker()
   }
 
+;; `dd` on very last line causes emulator to crash ...
   sub do_dd() {
-    ubyte c = view.c()
-    ubyte r = view.r()
+    ubyte col = view.c()
+    ubyte row = view.r()
 
-    uword curr_line = main.get_line_num(r)
-
-    ^^Line curr_addr = get_Line_addr(r)
+    ^^Line curr_addr = get_Line_addr(row) ; line being deleted
     ^^Line prev_addr = curr_addr.prev 
     ^^Line next_addr = curr_addr.next
+
+    ; track "freed" Lines, returns index in view.FREE
+    ubyte free_addr_idx = view.push_freed(curr_addr)
 
     ; short circuit curr_line out of links
     prev_addr.next = next_addr
     next_addr.prev = prev_addr
 
-    doc.lineCount = view.delete_item(curr_line, doc.lineCount)
+    doc.lineCount = view.delete_item(main.get_line_num(row), doc.lineCount)
 
     draw_screen()
 
-    cursor.replace(c, r)
+    cursor.replace(col, row)
     main.update_tracker()
   }
 
@@ -530,9 +565,6 @@ main {
       }
   }
 
-; left off fixing line drawing at the end of the document - so
-; it shows the right number of lines and doesn't bleed over
-
   sub draw_screen () {               ; NOTE: assumes view.CURR_TOP_LINE is correct
       ubyte idx = (view.CURR_TOP_LINE as ubyte) - 1
       ^^Line line = view.INDEX[idx]
@@ -540,13 +572,13 @@ main {
       ubyte row
       txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
       ubyte m,n
-      if (doc.lineCount / view.CURR_TOP_LINE >= 1) {
+      if (doc.lineCount / view.CURR_TOP_LINE > 1) {
         m = view.HEIGHT
         n = 0
       }
       else {
-        m = (doc.lineCount % view.CURR_TOP_LINE) as ubyte
-        n = (doc.lineCount - view.CURR_TOP_LINE) as ubyte
+        m = (doc.lineCount % view.CURR_TOP_LINE) as ubyte + 1
+        n = view.HEIGHT - (doc.lineCount - view.CURR_TOP_LINE) as ubyte - 1
       }
       uword lineNum = view.CURR_TOP_LINE
       repeat m {
@@ -562,9 +594,11 @@ main {
         lineNum++
       }
       repeat n {
-        say(view.BLANK_LINE)
+        row = view.r()
+        prints(view.BLANK_LINE)
+        txt.plot(0,row)
+        say("~")
       }
-
   }
 
   sub draw_bottom_line (uword lineNum) {
@@ -741,6 +775,19 @@ main {
   sub say (str x) {
     txt.print(x)
     txt.nl()
+  }
+
+  sub sayb (ubyte x) {
+    printb(x)
+    txt.nl()
+  }
+
+  sub printb (ubyte x) {
+    txt.print_ub0(x) 
+  }
+
+  sub printB (ubyte x) {
+    txt.print_ub(x) 
   }
 
   sub printw (uword x) {
