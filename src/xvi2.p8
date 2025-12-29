@@ -9,23 +9,24 @@
 %import diskio
 
 mode {
-  const ubyte NAV            = 1  ; modal state for navigation, default state
-  const ubyte INSERT         = 2  ; modal state for insert mode, triggered with ctrl-i
-  const ubyte REPLACE        = 3  ; modal state for replacement mode, triggered with ctrl-r
-  const ubyte COMMAND        = 4  ; modal state for entering a 
+  const ubyte NAV             = 1  ; modal state for navigation, default state
+  const ubyte INSERT          = 2  ; modal state for insert mode, triggered with ctrl-i
+  const ubyte REPLACE         = 3  ; modal state for replacement mode, triggered with ctrl-r
+  const ubyte COMMAND         = 4  ; modal state for entering a 
 }
 
 view {
-  const ubyte LEFT_MARGIN    = 4
-  const ubyte RIGHT_MARGIN   = 79
-  const ubyte HEIGHT         = 56 ; absolute height of the edit/view area
-  const ubyte TOP_LINE       = 2  ; row+1 of the first line of the document (FIRST_LINE_IDX)
-  const ubyte MIDDLE_LINE    = 27
-  const ubyte BOTTOM_LINE    = 57 ; row+1 of the last line of the view port (LAST_LINE_IDX)
-  const ubyte FOOTER_LINE    = 59
-  str         BLANK_LINE     = " " * 79
-  uword       CURR_TOP_LINE  = 1  ; tracks which actual doc line is at TOP_LINE
-  uword[main.MaxLines] INDEX = [0]*256 ; Line to address look up
+  const ubyte LEFT_MARGIN     = 4
+  const ubyte RIGHT_MARGIN    = 79
+  const ubyte HEIGHT          = 56 ; absolute height of the edit/view area
+  const ubyte TOP_LINE        = 2  ; row+1 of the first line of the document (FIRST_LINE_IDX)
+  const ubyte MIDDLE_LINE     = 27
+  const ubyte BOTTOM_LINE     = 57 ; row+1 of the last line of the view port (LAST_LINE_IDX)
+  const ubyte FOOTER_LINE     = 59
+  str         BLANK_LINE      = " " * 79
+  uword       CURR_TOP_LINE   = 1  ; tracks which actual doc line is at TOP_LINE
+  uword[main.MaxLines] INDEX  = [0]*256 ; Line to address look up
+  uword[main.MaxLines] INDEX2 = [0]*256 ; Line to address look up
 
   sub r() -> ubyte {
     return txt.get_row()
@@ -33,6 +34,30 @@ view {
 
   sub c() -> ubyte {
     return txt.get_column()
+  }
+
+  sub insert_item_after (uword curr_line, uword lineCount) -> uword {
+    uword next_line = curr_line + 1
+    uword newLineCount = lineCount + 1
+
+; this is not working yet !
+    uword i
+    for i in newLineCount downto next_line+1 {
+      ubyte idx = (i as ubyte) - 1
+      view.INDEX[idx] = view.INDEX[idx - 1]
+    }
+
+    return newLineCount
+  }
+
+  sub delete_item (uword curr_line, uword lineCount) -> uword {
+    uword newLineCount = lineCount - 1
+    uword i
+    for i in curr_line-1 to newLineCount {
+      ubyte idx = i as ubyte
+      view.INDEX[idx] = view.INDEX[idx + 1]
+    }
+    return newLineCount
   }
 }
 
@@ -427,15 +452,7 @@ main {
     new_next.prev  = curr_addr
     old_next.prev  = new_next
 
-    doc.lineCount  += 1
-
-    ; delete from array by shifting up
-    uword i
-    for i in doc.lineCount downto curr_line {
-      ubyte idx = i as ubyte
-      idx -= 1
-      view.INDEX[idx] = view.INDEX[idx - 1]
-    }
+    doc.lineCount  = view.insert_item_after(curr_line, doc.lineCount)
 
     draw_screen()
     cursor.replace(c, r)
@@ -456,23 +473,9 @@ main {
     prev_addr.next = next_addr
     next_addr.prev = prev_addr
 
-    ; delete from array by shifting up
-    uword i
-    for i in curr_line-1 to doc.lineCount-1 {
-      ubyte idx = i as ubyte
-      view.INDEX[idx] = view.INDEX[idx + 1]
-    }
+    doc.lineCount = view.delete_item(curr_line, doc.lineCount)
 
-    doc.lineCount  -= 1 ; reduce lineCount by 1
-
-    if curr_line + view.HEIGHT >= doc.lineCount {
-      txt.scroll_up()
-    }
-    else {
-      draw_screen()
-    }
-
-    txt.plot(c, r)
+    draw_screen()
 
     cursor.replace(c, r)
     main.update_tracker()
@@ -492,6 +495,12 @@ main {
     return view.CURR_TOP_LINE     ; returns 1 at the minimum
   }
 
+  sub printLineNum (uword number) {
+    txt.color($f)
+    printW(number)
+    txt.color($1)
+  }
+
   sub draw_initial_screen () {
       uword addr = view.INDEX[0]
       ubyte i
@@ -499,30 +508,55 @@ main {
         i = view.BOTTOM_LINE - 1
       }
       txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
+      ubyte row = view.r()
+      uword lineNum = 1
       repeat i {
-        txt.plot(view.LEFT_MARGIN, txt.get_row())
+        txt.plot(0, row)
+        printLineNum(lineNum)
+        txt.plot(view.LEFT_MARGIN,row)
         ^^Line line = addr
         say(line.text)
         addr = line.next
+        row++
+        lineNum++
       }
   }
 
+; left off fixing line drawing at the end of the document - so
+; it shows the right number of lines and doesn't bleed over
+
   sub draw_screen () {               ; NOTE: assumes view.CURR_TOP_LINE is correct
-      ubyte idx = view.CURR_TOP_LINE as ubyte - 1
-      uword addr = view.INDEX[idx]
+      ubyte idx = (view.CURR_TOP_LINE as ubyte) - 1
+      ^^Line line = view.INDEX[idx]
       ubyte c = view.c()
       ubyte row
       txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
-      repeat view.HEIGHT {
+      ubyte m,n
+      if (doc.lineCount / view.CURR_TOP_LINE >= 1) {
+        m = view.HEIGHT
+        n = 0
+      }
+      else {
+        m = (doc.lineCount % view.CURR_TOP_LINE) as ubyte
+        n = (doc.lineCount - view.CURR_TOP_LINE) as ubyte
+      }
+      uword lineNum = view.CURR_TOP_LINE
+      repeat m {
         row = view.r()
-        ^^Line line = addr
-        addr = line.next
-
         txt.plot(0, row)
         say(view.BLANK_LINE)
+        txt.plot(0, row)
+        printLineNum(lineNum)
         txt.plot(view.LEFT_MARGIN, row)
         say(line.text)
+        ; get next Line
+        line = line.next
+        lineNum++
       }
+      repeat n {
+        say(view.BLANK_LINE)
+      }
+
   }
 
   sub draw_bottom_line (uword lineNum) {
@@ -672,18 +706,6 @@ main {
     printw(view.CURR_TOP_LINE)
     prints(" - BOT: ")
     printw(view.CURR_TOP_LINE+view.HEIGHT-1)
-
-    ; add line numbers
-    ubyte i = 0
-    uword j = 0
-    
-    repeat view.HEIGHT {
-      txt.plot(0,view.TOP_LINE+i)
-      printW(view.CURR_TOP_LINE+j)
-      i += 1
-      j += 1
-    }
-
     txt.plot(X,Y)
   }
 
