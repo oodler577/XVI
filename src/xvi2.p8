@@ -45,8 +45,25 @@ view {
     return txt.get_column()
   }
 
-  ; this function does not increment doc.lineCount, but returns the uword that
-  ; should be assigned to it
+  sub insert_line_before (uword new_addr, uword curr_line, uword lineCount) -> uword {
+    uword newLineCount = lineCount + 1    ; new line count
+    uword curr_idx     = curr_line - 1    ; array index in view.INDEX to put the new line addres
+    uword last_idx     = newLineCount - 1 ; idx of the last line in the document
+
+    uword i
+    ; Note: the range decrements by 1 from last_idx to the idx right before new_idx,
+    ; which is new_idx+1, since we're decrementing; ensures old contents in new_idx
+    ; get copied into the slot 'below' it ...
+    for i in last_idx downto curr_idx+1 step -1 {
+      ubyte idx = i as ubyte
+      view.INDEX[idx] = view.INDEX[idx-1]
+    }
+
+    ; finally, insert new address into the new_idx slot 
+    view.INDEX[curr_idx as ubyte] = new_addr 
+
+    return newLineCount
+  }
 
   sub insert_line_after (uword new_addr, uword curr_line, uword lineCount) -> uword {
     uword next_line    = curr_line + 1    ; next line number
@@ -218,7 +235,7 @@ main {
     this.prev = tail
     this.next = 0
     this.text = txtbuf
-    strings.copy(initial, this.text)
+    void strings.copy(initial, this.text)
 
     tail = this
     ; and return
@@ -234,7 +251,7 @@ main {
     this.prev = 0 
     this.next = 0
     this.text = txtbuf
-    strings.copy(initial, this.text)
+    void strings.copy(initial, this.text)
     return this
   }
 
@@ -244,11 +261,10 @@ main {
   }
 
   sub load_file(str filepath) {
-    ubyte i
     strings.strip(filepath)
     freeAll()
     txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
-    strings.copy(filepath,doc.filepath)
+    void strings.copy(filepath,doc.filepath)
     txt.print("Loading ")
     say(doc.filepath)
     sys.wait(20)
@@ -270,7 +286,7 @@ main {
         if length > MaxLength {
           str tmp = " " * (MaxLength + 1)
           strings.slice(lineBuffer, 0, MaxLength, tmp) 
-          strings.copy(tmp, lineBuffer)
+          void strings.copy(tmp, lineBuffer)
         } 
         uword lineAddr = allocLine(lineBuffer)
         idx = doc.lineCount as ubyte
@@ -396,6 +412,12 @@ main {
              }
           }
         }
+
+; yy - add curr_addr to clipboard
+; P  - create new line above
+; p  - create new line below
+; dd - should delete _and_ add to clipboard
+
         'd' -> {
           if main.MODE == mode.NAV {
             DDLOOP:
@@ -413,7 +435,23 @@ main {
             goto DDLOOP
           }
         }
+        'O' -> {
+          if main.MODE == mode.NAV {
+            main.insert_line_above()
+          }
+        }
         'o' -> {
+          if main.MODE == mode.NAV {
+            main.insert_line_below()
+          }
+        }
+; like O, o; except the new lines are copies from a clip board
+        'P' -> {
+          if main.MODE == mode.NAV {
+            main.insert_line_above()
+          }
+        }
+        'p' -> {
           if main.MODE == mode.NAV {
             main.insert_line_below()
           }
@@ -464,21 +502,10 @@ main {
   }
 
   sub get_line_num(ubyte r) -> uword {
+    const uword top = mkword(00,view.TOP_LINE)
     uword row       = mkword(00,r)
-    uword top       = mkword(00,view.TOP_LINE)
     uword curr_line = view.CURR_TOP_LINE + row - top
     return curr_line
-  }
-
-  sub get_Line_addr_NO_INDEX(ubyte r) -> uword {
-    uword curr_line = main.get_line_num(r)
-    ubyte idx = (curr_line as ubyte) - 1
-    ^^Line curr_addr = Buffer ; line #1
-    uword i
-    for i in 2 to curr_line {
-      curr_addr = curr_addr.next
-    }
-    return curr_addr
   }
 
   sub get_Line_addr(ubyte r) -> uword {
@@ -487,7 +514,35 @@ main {
     return view.INDEX[idx]
   }
 
-  ^^Line lastline
+  sub insert_line_above() {
+    ubyte c = view.c()
+    ubyte r = view.r()
+
+    uword curr_line = main.get_line_num(r) ; next_line is +1
+
+    ^^Line curr_addr = get_Line_addr(r)        ; gets memory addr of current Line
+    ^^Line old_prev  = curr_addr.prev
+    ^^Line new_prev  = main.allocNewLine("  ") ; creates new Line instance to insert
+
+    old_prev.next  = new_prev 
+    new_prev.next  = curr_addr
+    curr_addr.prev = new_prev
+    new_prev.prev  = old_prev
+
+    ;; call to update INDEX
+    doc.lineCount  = view.insert_line_before(new_prev, main.get_line_num(r), doc.lineCount)
+
+    ; need to assert new address got inserted into view.INDEX
+    void debug.assert(view.INDEX[curr_line as ubyte - 1], new_prev, debug.EQ, "INDEX[curr_line as ubyte - 1] == new_prev")
+    void debug.assert(view.INDEX[curr_line as ubyte], curr_addr, debug.EQ, "INDEX[curr_line as ubyte] == curr_addr")
+
+    draw_screen()     ; should be draw_screen(), but this is a much simpler function to debug with
+    txt.plot(c,r+1)
+
+    cursor.replace(c, r+1)
+    main.update_tracker()
+  }
+
   sub insert_line_below() {
     ubyte c = view.c()
     ubyte r = view.r()
@@ -505,8 +560,8 @@ main {
     doc.lineCount  = view.insert_line_after(new_next, main.get_line_num(r), doc.lineCount)
 
     ; need to assert new address got inserted into view.INDEX
-    debug.assert(view.INDEX[curr_line as ubyte - 1], curr_addr, debug.EQ, "INDEX[curr_line as ubyte - 1] == curr_addr")
-    debug.assert(view.INDEX[curr_line as ubyte], new_next, debug.EQ, "INDEX[curr_line as ubyte] == new_next")
+    void debug.assert(view.INDEX[curr_line as ubyte - 1], curr_addr, debug.EQ, "INDEX[curr_line as ubyte - 1] == curr_addr")
+    void debug.assert(view.INDEX[curr_line as ubyte], new_next, debug.EQ, "INDEX[curr_line as ubyte] == new_next")
 
     draw_screen()     ; should be draw_screen(), but this is a much simpler function to debug with
     txt.plot(c,r+1)
@@ -525,7 +580,7 @@ main {
     ^^Line next_addr = curr_addr.next     ; line after line being deleted
 
     ; track "freed" Lines, returns index in view.FREE
-    ubyte free_addr_idx = view.push_freed(curr_addr)
+    void view.push_freed(curr_addr)
 
     ; short circuit curr_line out of links
     prev_addr.next = next_addr
@@ -584,7 +639,7 @@ main {
   sub draw_screen () {               ; NOTE: assumes view.CURR_TOP_LINE is correct
       ubyte idx = (view.CURR_TOP_LINE as ubyte) - 1
       ^^Line line = view.INDEX[idx]
-      ubyte c = view.c()
+      void view.c()
       ubyte row
       txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
       ubyte m,n
@@ -605,13 +660,6 @@ main {
         printLineNum(lineNum)
         txt.plot(view.LEFT_MARGIN, row)
         say(line.text)
-;        str X = " " * 79
-;        strings.slice(line.text,0,25,X)
-;        prints(X)
-;        main.prints("   line addr: ")
-;        main.printH(line)
-;        main.prints("     next: ")
-;        main.sayH(line.next)
     
         ; get next Line
         line = line.next
@@ -659,7 +707,7 @@ main {
       ubyte c = view.c()
       uword last_page_start = doc.lineCount - view.HEIGHT + 1
       if view.CURR_TOP_LINE + view.HEIGHT < last_page_start {
-        incr_top_line(view.HEIGHT)
+        void incr_top_line(view.HEIGHT)
       }
       else {
         view.CURR_TOP_LINE = last_page_start
@@ -716,7 +764,7 @@ main {
     if curr_line == view.TOP_LINE {
       cursor.hide()
       txt.scroll_down()
-      decr_top_line(1)
+      void decr_top_line(1)
       txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
       draw_top_line(view.CURR_TOP_LINE) 
       txt.plot(0, view.BOTTOM_LINE+1) ; blank footer line
@@ -739,7 +787,7 @@ main {
     ubyte next_line = curr_line+1;
     if curr_line == view.BOTTOM_LINE {
       cursor.hide()
-      incr_top_line(1)               ; increment CURR_TOP_LINE
+      void incr_top_line(1)               ; increment CURR_TOP_LINE
       txt.plot(0, view.FOOTER_LINE) ; blank footer line
       prints(view.BLANK_LINE)
       txt.plot(0, 1)    ; blank top line
@@ -801,18 +849,18 @@ main {
     txt.nl()
   }
 
-  sub sayb (ubyte x) {
-    printb(x)
-    txt.nl()
-  }
-
-  sub printb (ubyte x) {
-    txt.print_ub0(x) 
-  }
-
-  sub printB (ubyte x) {
-    txt.print_ub(x) 
-  }
+;  sub sayb (ubyte x) {
+;    printb(x)
+;    txt.nl()
+;  }
+;
+;  sub printb (ubyte x) {
+;    txt.print_ub0(x) 
+;  }
+;
+;  sub printB (ubyte x) {
+;    txt.print_ub(x) 
+;  }
 
   sub printw (uword x) {
     txt.print_uw0(x) 
@@ -822,13 +870,13 @@ main {
     txt.print_uw(x) 
   }
 
-  sub printH (uword x) {
-    txt.print_uwhex(x, true)
-  }
-
-  sub sayH (uword x) {
-    main.printH(x)
-    txt.nl()
-  }
+;  sub printH (uword x) {
+;    txt.print_uwhex(x, true)
+;  }
+;
+;  sub sayH (uword x) {
+;    main.printH(x)
+;    txt.nl()
+;  }
 
 }
