@@ -47,6 +47,7 @@ view {
 
   ; this function does not increment doc.lineCount, but returns the uword that
   ; should be assigned to it
+
   sub insert_line_after (uword new_addr, uword curr_line, uword lineCount) -> uword {
     uword next_line    = curr_line + 1    ; next line number
     uword newLineCount = lineCount + 1    ; new line count
@@ -221,6 +222,19 @@ main {
 
     tail = this
     ; and return
+    return this
+  }
+
+  sub allocNewLine(^^ubyte initial) -> ^^Line {
+    ^^Line this = next                   ; return next space 
+    next += 1                            ; advance to end of struct
+    uword txtbuf = next as uword         ; use space after struct as buffer for text 
+    next = next as uword + MaxLength + 1 ; and advance past buffer space
+    ; populate the fields
+    this.prev = 0 
+    this.next = 0
+    this.text = txtbuf
+    strings.copy(initial, this.text)
     return this
   }
 
@@ -473,26 +487,28 @@ main {
     return view.INDEX[idx]
   }
 
+  ^^Line lastline
   sub insert_line_below() {
     ubyte c = view.c()
     ubyte r = view.r()
 
-    ^^Line curr_addr = get_Line_addr_NO_INDEX(r)                ; gets memory addr of current Line
-    ^^Line new_next  = main.allocLine(view.BLANK_LINE) ; creates new Line
+    uword curr_line = main.get_line_num(r) ; next_line is +1
 
-debug.assert(curr_addr, new_next, debug.NE, "curr_addr != new_next")
+    ^^Line curr_addr = get_Line_addr(r)        ; gets memory addr of current Line
+    ^^Line new_next  = main.allocNewLine("  ") ; creates new Line instance to insert
 
+    new_next.prev  = curr_addr
     new_next.next  = curr_addr.next 
     curr_addr.next = new_next
 
-  ;-- TMP naive update INDEX and lineCount
     ;; call to update INDEX
-    ;doc.lineCount  = view.insert_line_after(new_next, curr_line, doc.lineCount)
+    doc.lineCount  = view.insert_line_after(new_next, main.get_line_num(r), doc.lineCount)
 
-    doc.lineCount++
-  ;-- TMP naive update
+    ; need to assert new address got inserted into view.INDEX
+    debug.assert(view.INDEX[curr_line as ubyte - 1], curr_addr, debug.EQ, "INDEX[curr_line as ubyte - 1] == curr_addr")
+    debug.assert(view.INDEX[curr_line as ubyte], new_next, debug.EQ, "INDEX[curr_line as ubyte] == new_next")
 
-    draw_initial_screen()     ; should be draw_screen(), but this is a much simpler function to debug with
+    draw_screen()     ; should be draw_screen(), but this is a much simpler function to debug with
     txt.plot(c,r+1)
 
     cursor.replace(c, r+1)
@@ -505,8 +521,8 @@ debug.assert(curr_addr, new_next, debug.NE, "curr_addr != new_next")
     ubyte row = view.r()
 
     ^^Line curr_addr = get_Line_addr(row) ; line being deleted
-    ^^Line prev_addr = curr_addr.prev 
-    ^^Line next_addr = curr_addr.next
+    ^^Line prev_addr = curr_addr.prev     ; line before line being deleted
+    ^^Line next_addr = curr_addr.next     ; line after line being deleted
 
     ; track "freed" Lines, returns index in view.FREE
     ubyte free_addr_idx = view.push_freed(curr_addr)
@@ -589,6 +605,14 @@ debug.assert(curr_addr, new_next, debug.NE, "curr_addr != new_next")
         printLineNum(lineNum)
         txt.plot(view.LEFT_MARGIN, row)
         say(line.text)
+;        str X = " " * 79
+;        strings.slice(line.text,0,25,X)
+;        prints(X)
+;        main.prints("   line addr: ")
+;        main.printH(line)
+;        main.prints("     next: ")
+;        main.sayH(line.next)
+    
         ; get next Line
         line = line.next
         lineNum++
@@ -797,4 +821,14 @@ debug.assert(curr_addr, new_next, debug.NE, "curr_addr != new_next")
   sub printW (uword x) {
     txt.print_uw(x) 
   }
+
+  sub printH (uword x) {
+    txt.print_uwhex(x, true)
+  }
+
+  sub sayH (uword x) {
+    main.printH(x)
+    txt.nl()
+  }
+
 }
