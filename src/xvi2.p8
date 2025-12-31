@@ -26,9 +26,10 @@ view {
   const ubyte FOOTER_LINE     = 59
   str         BLANK_LINE      = " " * 79
   uword       CURR_TOP_LINE   = 1  ; tracks which actual doc line is at TOP_LINE
-  uword[main.MaxLines] INDEX  ; Line to address look up
+  uword[main.MaxLines] INDEX       ; Line to address look up
   ubyte FREEIDX               = 0
-  uword[main.MaxLines] FREE   ; freed addresses to reuse 
+  uword[main.MaxLines] FREE        ; freed addresses to reuse 
+  uword       CLIPBOARD       = 0  ; holds the address of the current line we can "paste"
 
   sub push_freed (uword addr) -> ubyte {
     view.FREE[view.FREEIDX] = addr
@@ -360,13 +361,15 @@ main {
     main.MODE = mode.NAV
 
 ; todo:
-; - replace mode
-; - insert mode
-; - yy, p, P, O
+; - replace mode <esc>r
+; - insert mode  <esc>i (most commonly used writing mode)
 ; - :w filetosave.txt
+; - fix bug in dd that crashes when dd'd last line
+; - :set number / :set nonumber (turns line numbers on/off)
 
-; doing:
+; DONE:
 ; - dd, o
+; - yy, p, P, O
 
     ubyte char = 0 
     NAVCHARLOOP:
@@ -412,12 +415,6 @@ main {
              }
           }
         }
-
-; yy - add curr_addr to clipboard
-; P  - create new line above
-; p  - create new line below
-; dd - should delete _and_ add to clipboard
-
         'd' -> {
           if main.MODE == mode.NAV {
             DDLOOP:
@@ -445,15 +442,31 @@ main {
             main.insert_line_below()
           }
         }
-; like O, o; except the new lines are copies from a clip board
+        'y' -> {
+          if main.MODE == mode.NAV {
+            YYLOOP:
+            void, char = cbm.GETIN()
+            when char {
+              $1b -> {       ; ESC key, throw into NAV mode from any other mode
+                main.MODE = mode.NAV
+                goto NAVCHARLOOP 
+              }
+              'y' -> {
+                main.do_yy()
+                goto NAVCHARLOOP 
+              }
+            }
+            goto YYLOOP
+          }
+        }
         'P' -> {
           if main.MODE == mode.NAV {
-            main.insert_line_above()
+            main.paste_line_above()
           }
         }
         'p' -> {
           if main.MODE == mode.NAV {
-            main.insert_line_below()
+            main.paste_line_below()
           }
         }
         ; N A V I G A T I O N
@@ -501,6 +514,18 @@ main {
       goto NAVCHARLOOP 
   }
 
+  sub alert(str message, ubyte ret_col, ubyte ret_row, ubyte delay, ubyte color) {
+    txt.plot(67, 1)
+    txt.color(color)
+    prints(message)
+    sys.wait(delay)
+    txt.plot(67, 1)
+    str BLANK = " " * 11 
+    txt.color($1) ; sets text back to white
+    prints(BLANK)
+    txt.plot(ret_col, ret_row)
+  }
+
   sub get_line_num(ubyte r) -> uword {
     const uword top = mkword(00,view.TOP_LINE)
     uword row       = mkword(00,r)
@@ -512,6 +537,73 @@ main {
     uword curr_line = main.get_line_num(r)
     ubyte idx = (curr_line as ubyte) - 1
     return view.INDEX[idx]
+  }
+
+  sub paste_line_above() {
+    if view.CLIPBOARD == 0 { ; indicates empty clipboard (nothing copied yet)
+      return
+    }
+
+    ubyte c = view.c()
+    ubyte r = view.r()
+
+    uword curr_line = main.get_line_num(r) ; next_line is +1
+
+    ^^Line curr_addr = get_Line_addr(r)        ; gets memory addr of current Line
+    ^^Line old_prev  = curr_addr.prev
+    ^^Line copy_addr = view.CLIPBOARD
+    ^^Line new_prev  = main.allocNewLine(copy_addr.text) ; new line with text from copied address
+
+    old_prev.next  = new_prev 
+    new_prev.next  = curr_addr
+    curr_addr.prev = new_prev
+    new_prev.prev  = old_prev
+
+    ;; call to update INDEX
+    doc.lineCount  = view.insert_line_before(new_prev, main.get_line_num(r), doc.lineCount)
+
+    ; need to assert new address got inserted into view.INDEX
+    void debug.assert(view.INDEX[curr_line as ubyte - 1], new_prev, debug.EQ, "INDEX[curr_line as ubyte - 1] == new_prev")
+    void debug.assert(view.INDEX[curr_line as ubyte], curr_addr, debug.EQ, "INDEX[curr_line as ubyte] == curr_addr")
+
+    draw_screen()     ; should be draw_screen(), but this is a much simpler function to debug with
+    txt.plot(c,r+1)
+
+    cursor.replace(c, r+1)
+    main.update_tracker()
+  }
+
+
+  sub paste_line_below() {
+    if view.CLIPBOARD == 0 { ; indicates empty clipboard (nothing copied yet)
+      return
+    }
+
+    ubyte c = view.c()
+    ubyte r = view.r()
+
+    uword curr_line = main.get_line_num(r) ; next_line is +1
+
+    ^^Line curr_addr = get_Line_addr(r)        ; gets memory addr of current Line
+    ^^Line copy_addr = view.CLIPBOARD
+    ^^Line new_next  = main.allocNewLine(copy_addr.text) ; new line with text from copied address
+
+    new_next.prev  = curr_addr
+    new_next.next  = curr_addr.next 
+    curr_addr.next = new_next
+
+    ;; call to update INDEX
+    doc.lineCount  = view.insert_line_after(new_next, main.get_line_num(r), doc.lineCount)
+
+    ; need to assert new address got inserted into view.INDEX
+    void debug.assert(view.INDEX[curr_line as ubyte - 1], curr_addr, debug.EQ, "INDEX[curr_line as ubyte - 1] == curr_addr")
+    void debug.assert(view.INDEX[curr_line as ubyte], new_next, debug.EQ, "INDEX[curr_line as ubyte] == new_next")
+
+    draw_screen()     ; should be draw_screen(), but this is a much simpler function to debug with
+    txt.plot(c,r+1)
+
+    cursor.replace(c, r+1)
+    main.update_tracker()
   }
 
   sub insert_line_above() {
@@ -570,6 +662,18 @@ main {
     main.update_tracker()
   }
 
+  sub do_yy() {
+    ubyte col = view.c()
+    ubyte row = view.r()
+
+    ^^Line curr_addr = get_Line_addr(row) ; line being deleted
+    ^^Line prev_addr = curr_addr.prev     ; line before line being deleted
+    ^^Line next_addr = curr_addr.next     ; line after line being deleted
+
+    view.CLIPBOARD   = curr_addr
+    alert("COPIED!", col, row, 60, $7)
+  }
+
 ;; `dd` on very last line causes emulator to crash ...
   sub do_dd() {
     ubyte col = view.c()
@@ -592,6 +696,9 @@ main {
 
     cursor.replace(col, row)
     main.update_tracker()
+
+    view.CLIPBOARD   = curr_addr ; save deleted address to clipboard for later pasting
+    alert("DELETED!", col, row, 20, $2)
   }
 
   sub incr_top_line(uword value) -> uword {
@@ -818,9 +925,6 @@ main {
   }
 
   ; util functions
-
-; TODO -
-; :set number (default), :set nonumber
 
   sub update_tracker () {
     ubyte X = view.c()
