@@ -340,6 +340,26 @@ main {
     }
   }
 
+;; mostly working, but some kinks left - for another time!!
+  sub save_file(str filepath) {
+    ubyte i
+    ubyte ub
+    diskio.f_open_w_seek(filepath)
+    ^^Line line = view.INDEX[0] 
+    do {
+      for i in 0 to 79 {
+        ub = @(line.text+i)     ; line.text is an address, we iterate over each byte
+        if ub >= 32 and ub <= 126 {
+          diskio.f_write(&ub, 1)
+        }
+      }
+      diskio.f_write($0d, 1) ; writes newline
+      line = line.next
+    } until line == 0
+    diskio.f_close_w()
+    alert("SAVED!", view.c(), view.r(), 60, $7)
+  }
+
   sub start () {
     txt.iso()
     doc.tabNum               = 0 ; for future proofing
@@ -353,9 +373,9 @@ main {
     splash()
 
     ;sys.wait(120)
-    load_file("sample6.txt")
-    draw_initial_screen()
-    cursor.place(view.LEFT_MARGIN, view.TOP_LINE)
+    ;load_file("sample6.txt")
+    ;draw_initial_screen()
+    ;cursor.place(view.LEFT_MARGIN, view.TOP_LINE)
 
     main.update_tracker()
     main.MODE = mode.NAV
@@ -364,10 +384,11 @@ main {
 ; - replace mode <esc>r
 ; - insert mode  <esc>i (most commonly used writing mode)
 ; - :w filetosave.txt
-; - fix bug in dd that crashes when dd'd last line
 ; - :set number / :set nonumber (turns line numbers on/off)
 
 ; DONE:
+; - fix bug in dd that crashes when dd'd last line (happening because next pointer
+;   of the very last line in the document was pointing to an invalid memory address
 ; - dd, o
 ; - yy, p, P, O
 
@@ -398,10 +419,11 @@ main {
              ; parse out file name (everything after ":N")
              str fn1 = " " * 60
              strings.slice(cursor.cmdBuffer, 1, strings.length(cursor.cmdBuffer)-1, fn1)
-             strings.strip(fn1)
+             strings.strip(fn1) ; prep filename
 
              when cursor.cmdBuffer[0] {
                'e' -> {
+                 ; 'e' is for "edit" - fn1 is the filename
                  load_file(fn1)
                  draw_initial_screen()
                  cursor.place(view.LEFT_MARGIN, view.TOP_LINE)
@@ -411,6 +433,12 @@ main {
                'q' -> {
                  txt.iso_off()
                  sys.exit(0)
+               }
+               'w' -> {
+                 ; 'w' is for "write" - fn1 is the filename
+                 save_file(fn1)
+                 main.update_tracker()
+                 main.MODE = mode.NAV
                }
              }
           }
@@ -674,7 +702,6 @@ main {
     alert("COPIED!", col, row, 60, $7)
   }
 
-;; `dd` on very last line causes emulator to crash ...
   sub do_dd() {
     ubyte col = view.c()
     ubyte row = view.r()
@@ -688,7 +715,9 @@ main {
 
     ; short circuit curr_line out of links
     prev_addr.next = next_addr
-    next_addr.prev = prev_addr
+    if next_addr != 0 {                   ; make sure curr_line is not last line of doc
+      next_addr.prev = prev_addr
+    }
 
     doc.lineCount = view.delete_item(main.get_line_num(row), doc.lineCount)
 
