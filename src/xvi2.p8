@@ -252,7 +252,10 @@ main {
     this.prev = 0 
     this.next = 0
     this.text = txtbuf
-    void strings.copy(initial, this.text)
+    void strings.trim(initial)
+    void strings.copy(view.BLANK_LINE, this.text) ; initialize with BLANK_LINE, eliminates random garbage
+
+    void strings.copy(initial, this.text)         ; then add text
     return this
   }
 
@@ -340,8 +343,19 @@ main {
     }
   }
 
+  sub save_current() {
+     str oldback = " " * 60
+     strings.copy(doc.filepath,oldback)
+     strings.append(oldback, ".swp") ; basically vi's .swp file
+     if diskio.exists(oldback) {
+       diskio.delete(oldback)
+     }
+     diskio.rename(doc.filepath, oldback)
+     save_as(doc.filepath)
+  }
+
 ;; mostly working, but some kinks left - for another time!!
-  sub save_file(str filepath) {
+  sub save_as(str filepath) {
     ubyte i
     ubyte ub
     diskio.f_open_w_seek(filepath)
@@ -353,10 +367,16 @@ main {
           diskio.f_write(&ub, 1)
         }
       }
-      diskio.f_write($0d, 1) ; writes newline
+      ;; trying to get the line endings correct (ChatGPT!)
+      ub = $0a
+      diskio.f_write(&ub, 1) ; LF
       line = line.next
     } until line == 0
     diskio.f_close_w()
+
+    main.update_tracker()
+    main.MODE = mode.NAV
+
     alert("SAVED!", view.c(), view.r(), 60, $7)
   }
 
@@ -372,7 +392,7 @@ main {
     txt.plot(0,1)
     splash()
 
-    ;sys.wait(120)
+    ;sys.wait(40)
     ;load_file("sample6.txt")
     ;draw_initial_screen()
     ;cursor.place(view.LEFT_MARGIN, view.TOP_LINE)
@@ -380,17 +400,22 @@ main {
     main.update_tracker()
     main.MODE = mode.NAV
 
-; todo:
+; TODO: 
 ; - replace mode <esc>r
 ; - insert mode  <esc>i (most commonly used writing mode)
-; - :w filetosave.txt
 ; - :set number / :set nonumber (turns line numbers on/off)
+; - ALERTs need to be non-blocking (probably need to use interrupts?)
+; - w - blocks if file exists,
+; - w!, wq! - force save, force save and quit
+; - q - block quit if no save since last time?
+; - q! - force quit
+; - stack based "undo" (p/P, o/O, dd)
+
+; DOING:
 
 ; DONE:
-; - fix bug in dd that crashes when dd'd last line (happening because next pointer
-;   of the very last line in the document was pointing to an invalid memory address
-; - dd, o
-; - yy, p, P, O
+; - :w filetosave.txt
+; - foo.txt causes memory overflow (end line was doubling the space taken up in memory)
 
     ubyte char = 0 
     NAVCHARLOOP:
@@ -436,7 +461,13 @@ main {
                }
                'w' -> {
                  ; 'w' is for "write" - fn1 is the filename
-                 save_file(fn1)
+                 if strings.length(fn1) > 0 {
+                   save_as(fn1)
+                   doc.filepath = fn1
+                 }
+                 else {
+                   save_current()
+                 }
                  main.update_tracker()
                  main.MODE = mode.NAV
                }
@@ -597,6 +628,8 @@ main {
     draw_screen()     ; should be draw_screen(), but this is a much simpler function to debug with
     txt.plot(c,r+1)
 
+    alert("PASTED!", c, r, 60, $7)
+
     cursor.replace(c, r+1)
     main.update_tracker()
   }
@@ -629,6 +662,8 @@ main {
 
     draw_screen()     ; should be draw_screen(), but this is a much simpler function to debug with
     txt.plot(c,r+1)
+
+    alert("PASTED!", c, r, 60, $7)
 
     cursor.replace(c, r+1)
     main.update_tracker()
@@ -727,7 +762,7 @@ main {
     main.update_tracker()
 
     view.CLIPBOARD   = curr_addr ; save deleted address to clipboard for later pasting
-    alert("DELETED!", col, row, 20, $2)
+    alert("DELETED!", col, row, 20, $4)
   }
 
   sub incr_top_line(uword value) -> uword {
