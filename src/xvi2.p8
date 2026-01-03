@@ -377,7 +377,7 @@ main {
     main.update_tracker()
     main.MODE = mode.NAV
 
-    alert("SAVED!", view.c(), view.r(), 60, $7)
+    alert("SAVED!", 60, $7)
   }
 
   sub start () {
@@ -393,33 +393,40 @@ main {
     splash()
 
     ;sys.wait(40)
-    ;load_file("sample6.txt")
-    ;draw_initial_screen()
-    ;cursor.place(view.LEFT_MARGIN, view.TOP_LINE)
+    load_file("sample6.txt")
+    draw_initial_screen()
+    cursor.place(view.LEFT_MARGIN, view.TOP_LINE)
 
     main.update_tracker()
     main.MODE = mode.NAV
 
 ; TODO: 
-; - replace mode <esc>r
-; - insert mode  <esc>i (most commonly used writing mode)
-; - :set number / :set nonumber (turns line numbers on/off)
-; - ALERTs need to be non-blocking (probably need to use interrupts?)
 ; - w - blocks if file exists,
-; - w!, wq! - force save, force save and quit
+; - wq! - force save, force save and quit
 ; - q - block quit if no save since last time?
 ; - q! - force quit
+; - replace mode <esc>r
+; - insert mode  <esc>i (most commonly used writing mode)
 ; - stack based "undo" (p/P, o/O, dd)
+; - ALERTs need to be non-blocking (probably need to use interrupts?)
+; - :set number / :set nonumber (turns line numbers on/off)
 
-; DOING:
+; DOING: <- start here!!
+; - w! filename.txt (bug exposed, nav on j stops at some point in the screen)
+; - - make sure existing file is overwritten on forced save ...
 
 ; DONE:
 ; - :w filetosave.txt
 ; - foo.txt causes memory overflow (end line was doubling the space taken up in memory)
 
     ubyte char = 0 
+    ubyte col
+    ubyte row
     NAVCHARLOOP:
       void, char = cbm.GETIN()
+      col = view.c()
+      row = view.r()
+
       when char {
         $0c -> {
           view.CURR_TOP_LINE = 1
@@ -441,9 +448,16 @@ main {
              txt.plot(0, view.FOOTER_LINE)
              prints(view.BLANK_LINE)
 
+             ubyte cmd_offset = 1
+             bool force = false
+             if cursor.cmdBuffer[1] == $21 { ; $21 is "!" 
+               force = true
+               cmd_offset = 2
+             }
+
              ; parse out file name (everything after ":N")
              str fn1 = " " * 60
-             strings.slice(cursor.cmdBuffer, 1, strings.length(cursor.cmdBuffer)-1, fn1)
+             strings.slice(cursor.cmdBuffer, cmd_offset, strings.length(cursor.cmdBuffer)-cmd_offset, fn1)
              strings.strip(fn1) ; prep filename
 
              when cursor.cmdBuffer[0] {
@@ -454,7 +468,7 @@ main {
                  cursor.place(view.LEFT_MARGIN, view.TOP_LINE)
                  main.update_tracker()
                  main.MODE = mode.NAV
-                }
+               }
                'q' -> {
                  txt.iso_off()
                  sys.exit(0)
@@ -462,12 +476,18 @@ main {
                'w' -> {
                  ; 'w' is for "write" - fn1 is the filename
                  if strings.length(fn1) > 0 {
-                   save_as(fn1)
-                   doc.filepath = fn1
+                   if diskio.exists(fn1) and force == false {
+                     warn("File Exists. Use w! to override.")
+                   }
+                   else {
+                     save_as(fn1)
+                     doc.filepath = fn1
+                   }
                  }
                  else {
                    save_current()
                  }
+                 cursor.place(col, row)
                  main.update_tracker()
                  main.MODE = mode.NAV
                }
@@ -573,16 +593,20 @@ main {
       goto NAVCHARLOOP 
   }
 
-  sub alert(str message, ubyte ret_col, ubyte ret_row, ubyte delay, ubyte color) {
-    txt.plot(67, 1)
+  sub warn(str message) {
+    alert(message, 30, $2)
+  }
+
+  sub alert(str message, ubyte delay, ubyte color) {
+    ubyte length = strings.length(message)
+    txt.plot(78-length, 1)
     txt.color(color)
     prints(message)
     sys.wait(delay)
-    txt.plot(67, 1)
-    str BLANK = " " * 11 
+    txt.plot(78-length, 1)
     txt.color($1) ; sets text back to white
-    prints(BLANK)
-    txt.plot(ret_col, ret_row)
+    txt.plot(0,1)
+    prints(view.BLANK_LINE)
   }
 
   sub get_line_num(ubyte r) -> uword {
@@ -628,7 +652,7 @@ main {
     draw_screen()     ; should be draw_screen(), but this is a much simpler function to debug with
     txt.plot(c,r+1)
 
-    alert("PASTED!", c, r, 60, $7)
+    alert("PASTED!", 60, $7)
 
     cursor.replace(c, r+1)
     main.update_tracker()
@@ -663,7 +687,7 @@ main {
     draw_screen()     ; should be draw_screen(), but this is a much simpler function to debug with
     txt.plot(c,r+1)
 
-    alert("PASTED!", c, r, 60, $7)
+    alert("PASTED!", 60, $7)
 
     cursor.replace(c, r+1)
     main.update_tracker()
@@ -734,7 +758,9 @@ main {
     ^^Line next_addr = curr_addr.next     ; line after line being deleted
 
     view.CLIPBOARD   = curr_addr
-    alert("COPIED!", col, row, 60, $7)
+
+    alert("COPIED!", 60, $7)
+    cursor.replace(col, row)
   }
 
   sub do_dd() {
@@ -758,11 +784,12 @@ main {
 
     draw_screen()
 
+    view.CLIPBOARD   = curr_addr ; save deleted address to clipboard for later pasting
+    alert("DELETED!", 20, $4)
+
     cursor.replace(col, row)
     main.update_tracker()
 
-    view.CLIPBOARD   = curr_addr ; save deleted address to clipboard for later pasting
-    alert("DELETED!", col, row, 20, $4)
   }
 
   sub incr_top_line(uword value) -> uword {
