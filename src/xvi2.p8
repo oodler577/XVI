@@ -141,6 +141,7 @@ cursor {
 
   sub command_prompt () {
      ubyte cmdchar
+     void strings.copy(" " * 60, cmdBuffer)
      txt.plot(0, view.FOOTER_LINE) ; move cursor to the starting position for writing
      main.prints(view.BLANK_LINE)
      txt.plot(0, view.FOOTER_LINE)
@@ -166,7 +167,8 @@ cursor {
 }
 
 main {
-  ubyte MODE               = mode.NAV ; initial mode is NAV
+  ubyte MODE       = mode.NAV ; initial mode is NAV
+  uword lineCount
 
   struct Document {
     ubyte tabNum    ; 0
@@ -174,6 +176,7 @@ main {
     ubyte startBank ; actual bank number for switching
     uword firstLine ; address of the first line of the document
     uword lineCount ; number of lines
+    bool  unsaved
     ^^ubyte filepath
     ubyte data00, data01, data02, data03, data04, data05, data06, data07
     ubyte data08, data09, data10, data11, data12, data13, data14, data15
@@ -252,7 +255,7 @@ main {
     this.prev = 0 
     this.next = 0
     this.text = txtbuf
-    void strings.trim(initial)
+    strings.trim(initial)
     void strings.copy(view.BLANK_LINE, this.text) ; initialize with BLANK_LINE, eliminates random garbage
 
     void strings.copy(initial, this.text)         ; then add text
@@ -273,7 +276,8 @@ main {
     say(doc.filepath)
     sys.wait(20)
     txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
-    doc.lineCount = 0
+    doc.unsaved = false
+    main.lineCount = 0
 
     ubyte tries = 0
     ubyte idx   = 0
@@ -293,9 +297,9 @@ main {
           void strings.copy(tmp, lineBuffer)
         } 
         uword lineAddr = allocLine(lineBuffer)
-        idx = doc.lineCount as ubyte
+        idx = main.lineCount as ubyte
         view.INDEX[idx] = lineAddr
-        doc.lineCount++
+        main.lineCount++
       }
       diskio.f_close()
       txt.clear_screen()
@@ -343,10 +347,11 @@ main {
     }
   }
 
-  sub save_current() {
+  sub save_current_file() {
      str oldback = " " * 60
-     strings.copy(doc.filepath,oldback)
-     strings.append(oldback, ".swp") ; basically vi's .swp file
+     void strings.copy(doc.filepath,oldback)
+     strings.trim(oldback)
+     void strings.append(oldback, ".swp") ; basically vi's .swp file
      if diskio.exists(oldback) {
        diskio.delete(oldback)
      }
@@ -356,28 +361,28 @@ main {
 
 ;; mostly working, but some kinks left - for another time!!
   sub save_as(str filepath) {
+    info("saving ...")
+    info(filepath)
+    infoW(main.lineCount)
+    info("lines")
+
     ubyte i
     ubyte ub
-    diskio.f_open_w_seek(filepath)
-    ^^Line line = view.INDEX[0] 
+    void diskio.f_open_w_seek(filepath)
+    ^^Line line = view.INDEX[0]
     do {
       for i in 0 to 79 {
         ub = @(line.text+i)     ; line.text is an address, we iterate over each byte
         if ub >= 32 and ub <= 126 {
-          diskio.f_write(&ub, 1)
+          void diskio.f_write(&ub, 1)
         }
       }
       ;; trying to get the line endings correct (ChatGPT!)
       ub = $0a
-      diskio.f_write(&ub, 1) ; LF
+      void diskio.f_write(&ub, 1) ; LF
       line = line.next
     } until line == 0
     diskio.f_close_w()
-
-    main.update_tracker()
-    main.MODE = mode.NAV
-
-    alert("SAVED!", 60, $7)
   }
 
   sub start () {
@@ -385,7 +390,7 @@ main {
     doc.tabNum               = 0 ; for future proofing
     doc.charset              = 0 ; for future proofing
     doc.startBank            = 1 ; for future proofing
-    doc.lineCount            = 0
+    main.lineCount            = 0
     doc.firstLine            = Buffer 
     doc.filepath             = " " * 81
 
@@ -413,6 +418,7 @@ main {
 
 ; DOING: <- start here!!
 ; - w! filename.txt (bug exposed, nav on j stops at some point in the screen)
+; ------- main.lineCount is getting truncated or reset somehow
 ; - - make sure existing file is overwritten on forced save ...
 
 ; DONE:
@@ -428,71 +434,101 @@ main {
       row = view.r()
 
       when char {
-        $0c -> {
-          view.CURR_TOP_LINE = 1
-          draw_initial_screen()
-          cursor.replace(view.LEFT_MARGIN, view.TOP_LINE)
-          main.update_tracker()
-          main.MODE = mode.NAV
-        }
+        ;$0c -> {  ; this is a "form feed", and I have no idea why I put this here
+        ;  view.CURR_TOP_LINE = 1
+        ;  draw_initial_screen()
+        ;  cursor.replace(view.LEFT_MARGIN, view.TOP_LINE)
+        ;  main.update_tracker()
+        ;  main.MODE = mode.NAV
+        ;}
         $1b -> {       ; ESC key, throw into NAV mode from any other mode
           main.MODE = mode.NAV
         }
         $3a -> {       ; ':',  mode
+   ;debug.assert(main.lineCount, 93, debug.EQ, "Checkpoint 1 ... main.lineCount == 93")
           if main.MODE == mode.NAV {
-             main.MODE = mode.COMMAND
+            ;main.MODE = mode.COMMAND
 
-             cursor.command_prompt()
+            cursor.command_prompt() ; populates cursor.cmdBuffer
 
-             ; clear command line
-             txt.plot(0, view.FOOTER_LINE)
-             prints(view.BLANK_LINE)
+            ; clear command line
+            txt.plot(0, view.FOOTER_LINE)
+            prints(view.BLANK_LINE)
+            main.update_tracker()
 
-             ubyte cmd_offset = 1
-             bool force = false
-             if cursor.cmdBuffer[1] == $21 { ; $21 is "!" 
-               force = true
-               cmd_offset = 2
-             }
+            ; sets the string index to do the strings.slice below, will change if there is a "!"
+            ; it'll also necessarily change if a command is detected;
+            ; :w filename
+            ; :w! filename
+            ; :q
+            ; :q!
+            ; :wq
+            ; :wq!
+            ; :!some-external-looking-command
 
-             ; parse out file name (everything after ":N")
-             str fn1 = " " * 60
-             strings.slice(cursor.cmdBuffer, cmd_offset, strings.length(cursor.cmdBuffer)-cmd_offset, fn1)
-             strings.strip(fn1) ; prep filename
+            ubyte cmd_offset = 1
+            bool force = false
+            if cursor.cmdBuffer[1] == $21 { ; $21 is "!" 
+              force = true
+              cmd_offset = 2
+            }
 
-             when cursor.cmdBuffer[0] {
-               'e' -> {
-                 ; 'e' is for "edit" - fn1 is the filename
-                 load_file(fn1)
-                 draw_initial_screen()
-                 cursor.place(view.LEFT_MARGIN, view.TOP_LINE)
-                 main.update_tracker()
-                 main.MODE = mode.NAV
-               }
-               'q' -> {
-                 txt.iso_off()
-                 sys.exit(0)
-               }
-               'w' -> {
-                 ; 'w' is for "write" - fn1 is the filename
-                 if strings.length(fn1) > 0 {
-                   if diskio.exists(fn1) and force == false {
-                     warn("File Exists. Use w! to override.")
-                   }
-                   else {
-                     save_as(fn1)
-                     doc.filepath = fn1
-                   }
-                 }
-                 else {
-                   save_current()
-                 }
-                 cursor.place(col, row)
-                 main.update_tracker()
-                 main.MODE = mode.NAV
-               }
-             }
+            ; parse out file name (everything after ":N")
+            str cmd = " " * 60
+            ubyte cmd_length = strings.copy(cursor.cmdBuffer, cmd)
+            str fn1 = " " * 60
+
+            ;debug.assert(main.lineCount, 93, debug.EQ, "Checkpoint 1 ... main.lineCount == 93")
+            ;warnW(main.lineCount)
+            void strings.slice(cmd, cmd_offset, cmd_length-cmd_offset, fn1) ; <- somehow this is affecting main.lineCount ...
+            ;warnW(main.lineCount)
+
+            ;debug.assert(main.lineCount, 93, debug.EQ, "Checkpoint 2 ... main.lineCount == 93")
+            strings.strip(fn1) ; prep filename
+
+            when cursor.cmdBuffer[0] {
+              'e' -> {
+                ; 'e' is for "edit" - fn1 is the filename
+                load_file(fn1)
+                draw_initial_screen()
+                col = view.LEFT_MARGIN
+                row = view.TOP_LINE
+              }
+              'q' -> {
+                if doc.unsaved == true and not force {
+                    warn("Unsaved changes exist. Use q! to override.")
+                }
+                else {
+                  txt.iso_off()
+                  sys.exit(0)
+                }
+              }
+              'w' -> {
+                ; 'w' is for "write" - fn1 is the filename
+                if strings.length(fn1) > 0 {
+                  if diskio.exists(fn1) and not force {
+                    warn("File Exists. Use w! to override.")
+                  }
+                  else {
+                    diskio.delete(fn1)
+                    save_as(fn1)
+                    void strings.copy(fn1, doc.filepath) 
+                  }
+                }
+                else {
+                  save_current_file()
+                }
+              }
+              else -> {
+                warn("Uknown command!")
+              }
+            }
           }
+
+          ;debug.assert(main.lineCount, 93, debug.EQ, "ln 515 ... main.lineCount == 93")
+          main.MODE = mode.NAV
+          cursor.replace(col, row)
+          main.update_tracker()
         }
         'd' -> {
           if main.MODE == mode.NAV {
@@ -593,19 +629,43 @@ main {
       goto NAVCHARLOOP 
   }
 
-  sub warn(str message) {
-    alert(message, 30, $2)
+  sub info(str message) {
+    alert(message, 15, $7, $6)
   }
 
-  sub alert(str message, ubyte delay, ubyte color) {
+  sub warn(str message) {
+    alert(message, 30, $2, $1)
+  }
+
+  sub alert(str message, ubyte delay, ubyte color1, ubyte color2) {
     ubyte length = strings.length(message)
     txt.plot(78-length, 1)
-    txt.color(color)
+    txt.color2(color1, color2)
     prints(message)
     sys.wait(delay)
     txt.plot(78-length, 1)
-    txt.color($1) ; sets text back to white
-    txt.plot(0,1)
+    txt.color2($1, $6) ; sets text back to default, white on blue
+    txt.plot(view.LEFT_MARGIN, 1)
+    prints(view.BLANK_LINE)
+  }
+
+  sub infoW(uword message) {
+    alertW(message, 15, $7, $6)
+  }
+
+  sub warnW(uword message) {
+    alertW(message, 30, $2, $1)
+  }
+
+  sub alertW(uword message, ubyte delay, ubyte color1, ubyte color2) {
+    ubyte length = strings.length(message)
+    txt.plot(74, 1)
+    txt.color2(color1, color2)
+    printW(message)
+    sys.wait(delay)
+    txt.plot(74, 1)
+    txt.color2($1, $6) ; sets text back to default, white on blue
+    txt.plot(view.LEFT_MARGIN, 1)
     prints(view.BLANK_LINE)
   }
 
@@ -643,7 +703,7 @@ main {
     new_prev.prev  = old_prev
 
     ;; call to update INDEX
-    doc.lineCount  = view.insert_line_before(new_prev, main.get_line_num(r), doc.lineCount)
+    main.lineCount = view.insert_line_before(new_prev, main.get_line_num(r), main.lineCount)
 
     ; need to assert new address got inserted into view.INDEX
     void debug.assert(view.INDEX[curr_line as ubyte - 1], new_prev, debug.EQ, "INDEX[curr_line as ubyte - 1] == new_prev")
@@ -652,7 +712,9 @@ main {
     draw_screen()     ; should be draw_screen(), but this is a much simpler function to debug with
     txt.plot(c,r+1)
 
-    alert("PASTED!", 60, $7)
+    info("PASTED ABOVE!")
+
+    doc.unsaved = true
 
     cursor.replace(c, r+1)
     main.update_tracker()
@@ -678,7 +740,7 @@ main {
     curr_addr.next = new_next
 
     ;; call to update INDEX
-    doc.lineCount  = view.insert_line_after(new_next, main.get_line_num(r), doc.lineCount)
+    main.lineCount = view.insert_line_after(new_next, main.get_line_num(r), main.lineCount)
 
     ; need to assert new address got inserted into view.INDEX
     void debug.assert(view.INDEX[curr_line as ubyte - 1], curr_addr, debug.EQ, "INDEX[curr_line as ubyte - 1] == curr_addr")
@@ -687,7 +749,9 @@ main {
     draw_screen()     ; should be draw_screen(), but this is a much simpler function to debug with
     txt.plot(c,r+1)
 
-    alert("PASTED!", 60, $7)
+    info("PASTED BELOW!")
+
+    doc.unsaved = true
 
     cursor.replace(c, r+1)
     main.update_tracker()
@@ -709,7 +773,7 @@ main {
     new_prev.prev  = old_prev
 
     ;; call to update INDEX
-    doc.lineCount  = view.insert_line_before(new_prev, main.get_line_num(r), doc.lineCount)
+    main.lineCount = view.insert_line_before(new_prev, main.get_line_num(r), main.lineCount)
 
     ; need to assert new address got inserted into view.INDEX
     void debug.assert(view.INDEX[curr_line as ubyte - 1], new_prev, debug.EQ, "INDEX[curr_line as ubyte - 1] == new_prev")
@@ -717,6 +781,10 @@ main {
 
     draw_screen()     ; should be draw_screen(), but this is a much simpler function to debug with
     txt.plot(c,r+1)
+
+    info("ADDED LINE ABOVE!")
+
+    doc.unsaved = true
 
     cursor.replace(c, r+1)
     main.update_tracker()
@@ -736,7 +804,7 @@ main {
     curr_addr.next = new_next
 
     ;; call to update INDEX
-    doc.lineCount  = view.insert_line_after(new_next, main.get_line_num(r), doc.lineCount)
+    main.lineCount = view.insert_line_after(new_next, main.get_line_num(r), main.lineCount)
 
     ; need to assert new address got inserted into view.INDEX
     void debug.assert(view.INDEX[curr_line as ubyte - 1], curr_addr, debug.EQ, "INDEX[curr_line as ubyte - 1] == curr_addr")
@@ -745,25 +813,30 @@ main {
     draw_screen()     ; should be draw_screen(), but this is a much simpler function to debug with
     txt.plot(c,r+1)
 
+    info("ADDED LINE ABOVE!")
+
+    doc.unsaved = true
+
     cursor.replace(c, r+1)
     main.update_tracker()
   }
 
   sub do_yy() {
+    info("yy")
+
     ubyte col = view.c()
     ubyte row = view.r()
 
     ^^Line curr_addr = get_Line_addr(row) ; line being deleted
-    ^^Line prev_addr = curr_addr.prev     ; line before line being deleted
-    ^^Line next_addr = curr_addr.next     ; line after line being deleted
 
     view.CLIPBOARD   = curr_addr
 
-    alert("COPIED!", 60, $7)
     cursor.replace(col, row)
   }
 
   sub do_dd() {
+    info("dd")
+
     ubyte col = view.c()
     ubyte row = view.r()
 
@@ -780,12 +853,13 @@ main {
       next_addr.prev = prev_addr
     }
 
-    doc.lineCount = view.delete_item(main.get_line_num(row), doc.lineCount)
+    main.lineCount = view.delete_item(main.get_line_num(row), main.lineCount)
 
     draw_screen()
 
     view.CLIPBOARD   = curr_addr ; save deleted address to clipboard for later pasting
-    alert("DELETED!", 20, $4)
+
+    doc.unsaved = true
 
     cursor.replace(col, row)
     main.update_tracker()
@@ -793,7 +867,7 @@ main {
   }
 
   sub incr_top_line(uword value) -> uword {
-    if  view.CURR_TOP_LINE + value <= doc.lineCount {
+    if  view.CURR_TOP_LINE + value <= main.lineCount {
       view.CURR_TOP_LINE += value
     }
     return view.CURR_TOP_LINE     ; stops ++'ing with the last HEIGHT lines in the document 
@@ -814,9 +888,9 @@ main {
 
   sub draw_initial_screen () {
       uword addr = view.INDEX[0]
-      ubyte i = doc.lineCount as ubyte ; won't be used if > view.HEIGHT
+      ubyte i = main.lineCount as ubyte ; won't be used if > view.HEIGHT
       ; catch docs that go beyond screen
-      if doc.lineCount > view.HEIGHT {
+      if main.lineCount > view.HEIGHT {
         i = view.HEIGHT
       }
       txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
@@ -841,13 +915,13 @@ main {
       ubyte row
       txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
       ubyte m,n
-      if (doc.lineCount / view.CURR_TOP_LINE > 1) {
+      if (main.lineCount / view.CURR_TOP_LINE > 1) {
         m = view.HEIGHT
         n = 0
       }
       else {
-        m = (doc.lineCount % view.CURR_TOP_LINE) as ubyte + 1
-        n = view.HEIGHT - (doc.lineCount - view.CURR_TOP_LINE) as ubyte - 1
+        m = (main.lineCount % view.CURR_TOP_LINE) as ubyte + 1
+        n = view.HEIGHT - (main.lineCount - view.CURR_TOP_LINE) as ubyte - 1
       }
       uword lineNum = view.CURR_TOP_LINE
       repeat m {
@@ -872,7 +946,7 @@ main {
   }
 
   sub draw_bottom_line (uword lineNum) {
-      if lineNum > doc.lineCount {
+      if lineNum > main.lineCount {
         return
       }
       ubyte idx = lineNum as ubyte - 1
@@ -903,7 +977,7 @@ main {
 
   sub page_forward() {
       ubyte c = view.c()
-      uword last_page_start = doc.lineCount - view.HEIGHT + 1
+      uword last_page_start = main.lineCount - view.HEIGHT + 1
       if view.CURR_TOP_LINE + view.HEIGHT < last_page_start {
         void incr_top_line(view.HEIGHT)
       }
@@ -930,7 +1004,7 @@ main {
 
   sub jump_to_begin() {
       ubyte c = view.c()
-      if doc.lineCount > view.HEIGHT {
+      if main.lineCount > view.HEIGHT {
         view.CURR_TOP_LINE = 1
         draw_screen() 
       }
@@ -940,13 +1014,13 @@ main {
 
   sub jump_to_end() {
       ubyte c = view.c()
-      if doc.lineCount > view.HEIGHT {
-        view.CURR_TOP_LINE = doc.lineCount - view.HEIGHT + 1
+      if main.lineCount > view.HEIGHT {
+        view.CURR_TOP_LINE = main.lineCount - view.HEIGHT + 1
         draw_screen() 
         cursor.replace(c, view.BOTTOM_LINE)
       }
       else {
-        cursor.place(c, (doc.lineCount as ubyte) + 1)
+        cursor.place(c, (main.lineCount as ubyte) + 1)
       }
       main.update_tracker()
   }
@@ -976,8 +1050,8 @@ main {
   }
 
   sub cursor_down_on_j () {
-    ; j (down) from going past doc.lineCount
-    if view.CURR_TOP_LINE == doc.lineCount - view.HEIGHT + 1 and view.r() == view.BOTTOM_LINE {
+    ; j (down) from going past main.lineCount
+    if view.CURR_TOP_LINE == main.lineCount - view.HEIGHT + 1 and view.r() == view.BOTTOM_LINE {
       return
     }
     ubyte curr_line = view.r()
@@ -985,7 +1059,7 @@ main {
     ubyte next_line = curr_line+1;
     if curr_line == view.BOTTOM_LINE {
       cursor.hide()
-      void incr_top_line(1)               ; increment CURR_TOP_LINE
+      void incr_top_line(1)         ; increment CURR_TOP_LINE
       txt.plot(0, view.FOOTER_LINE) ; blank footer line
       prints(view.BLANK_LINE)
       txt.plot(0, 1)    ; blank top line
@@ -995,7 +1069,7 @@ main {
       draw_bottom_line(view.CURR_TOP_LINE+view.HEIGHT-1)
       cursor.replace(curr_col, curr_line)
     }
-    else if next_line < doc.lineCount+view.TOP_LINE {
+    else if next_line < main.lineCount+view.TOP_LINE {
       cursor.place(view.c(), next_line)
     }
     main.update_tracker()
@@ -1023,7 +1097,7 @@ main {
     txt.plot(0, view.FOOTER_LINE)
     prints(view.BLANK_LINE)
     txt.plot(1, view.FOOTER_LINE)
-    printw(doc.lineCount)
+    printw(main.lineCount)
     prints(" lines, x: ")
     printw(X - view.LEFT_MARGIN + 1)
     prints(", y: ")

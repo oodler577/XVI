@@ -38,9 +38,12 @@ trace:
 
 
 # --- xvi2 build using cpp output ---
-xvi2: $(XVI2_PP)
-	$(PROG8C) -target $(TARGET) $(XVI2_PP)
-	mv -f xvi2.pp.prg xvi2.prg
+#xvi2: $(XVI2_PP)
+#	$(PROG8C) -target $(TARGET) $(XVI2_PP)
+#	mv -f xvi2.pp.prg xvi2.prg
+
+xvi2:
+	$(PROG8C) -target $(TARGET) $(XVI2_SRC)
 
 run:
 	$(EMU) -debug -scale 2 -prg xvi2.prg -run -gif demo.gif
