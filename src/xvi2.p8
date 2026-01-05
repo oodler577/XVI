@@ -383,6 +383,9 @@ main {
       line = line.next
     } until line == 0
     diskio.f_close_w()
+
+    info("saved ok ...")
+    doc.unsaved = false
   }
 
   sub start () {
@@ -404,26 +407,33 @@ main {
 
     main.update_tracker()
     main.MODE = mode.NAV
+; BUGS
+; - scrolling bug with dd on last page
 
 ; TODO: 
-; - w - blocks if file exists,
-; - wq! - force save, force save and quit
-; - q - block quit if no save since last time?
-; - q! - force quit
-; - replace mode <esc>r
 ; - insert mode  <esc>i (most commonly used writing mode)
 ; - stack based "undo" (p/P, o/O, dd)
 ; - ALERTs need to be non-blocking (probably need to use interrupts?)
 ; - :set number / :set nonumber (turns line numbers on/off)
+; - wq! - force save, force save and quit
+; - allow many more lines (convert Line to use str instead permanent line)
+; - do not write contiguous spaces (fully blank linkes, trim when writing)
 
 ; DOING: <- start here!!
-; - w! filename.txt (bug exposed, nav on j stops at some point in the screen)
-; ------- main.lineCount is getting truncated or reset somehow
-; - - make sure existing file is overwritten on forced save ...
+; - replace mode <esc>r
+; - :e on splash to start new document buffer
+; - ...
 
 ; DONE:
 ; - :w filetosave.txt
+; - w - blocks if file exists,
 ; - foo.txt causes memory overflow (end line was doubling the space taken up in memory)
+; - q - block quit if no save since last time?
+; - w! filename.txt (bug exposed, nav on j stops at some point in the screen)
+; - main.lineCount is getting truncated or reset somehow
+; ---- used main.lineCount, there might still be a bug between strings.slice + Document.lineCount
+; - make sure existing file is overwritten on forced save ...
+; - q! - force quit
 
     ubyte char = 0 
     ubyte col
@@ -480,7 +490,7 @@ main {
 
             ;debug.assert(main.lineCount, 93, debug.EQ, "Checkpoint 1 ... main.lineCount == 93")
             ;warnW(main.lineCount)
-            void strings.slice(cmd, cmd_offset, cmd_length-cmd_offset, fn1) ; <- somehow this is affecting main.lineCount ...
+            strings.slice(cmd, cmd_offset, cmd_length-cmd_offset, fn1) ; <- somehow this is affecting main.lineCount ...
             ;warnW(main.lineCount)
 
             ;debug.assert(main.lineCount, 93, debug.EQ, "Checkpoint 2 ... main.lineCount == 93")
@@ -496,7 +506,7 @@ main {
               }
               'q' -> {
                 if doc.unsaved == true and not force {
-                    warn("Unsaved changes exist. Use q! to override.")
+                    warn("Unsaved changes exist. Use q! to override ...")
                 }
                 else {
                   txt.iso_off()
@@ -507,7 +517,7 @@ main {
                 ; 'w' is for "write" - fn1 is the filename
                 if strings.length(fn1) > 0 {
                   if diskio.exists(fn1) and not force {
-                    warn("File Exists. Use w! to override.")
+                    warn("File Exists. Use w! to override ...")
                   }
                   else {
                     diskio.delete(fn1)
@@ -520,7 +530,7 @@ main {
                 }
               }
               else -> {
-                warn("Uknown command!")
+                warn("Unknown command ...")
               }
             }
           }
@@ -629,46 +639,6 @@ main {
       goto NAVCHARLOOP 
   }
 
-  sub info(str message) {
-    alert(message, 15, $7, $6)
-  }
-
-  sub warn(str message) {
-    alert(message, 30, $2, $1)
-  }
-
-  sub alert(str message, ubyte delay, ubyte color1, ubyte color2) {
-    ubyte length = strings.length(message)
-    txt.plot(78-length, 1)
-    txt.color2(color1, color2)
-    prints(message)
-    sys.wait(delay)
-    txt.plot(78-length, 1)
-    txt.color2($1, $6) ; sets text back to default, white on blue
-    txt.plot(view.LEFT_MARGIN, 1)
-    prints(view.BLANK_LINE)
-  }
-
-  sub infoW(uword message) {
-    alertW(message, 15, $7, $6)
-  }
-
-  sub warnW(uword message) {
-    alertW(message, 30, $2, $1)
-  }
-
-  sub alertW(uword message, ubyte delay, ubyte color1, ubyte color2) {
-    ubyte length = strings.length(message)
-    txt.plot(74, 1)
-    txt.color2(color1, color2)
-    printW(message)
-    sys.wait(delay)
-    txt.plot(74, 1)
-    txt.color2($1, $6) ; sets text back to default, white on blue
-    txt.plot(view.LEFT_MARGIN, 1)
-    prints(view.BLANK_LINE)
-  }
-
   sub get_line_num(ubyte r) -> uword {
     const uword top = mkword(00,view.TOP_LINE)
     uword row       = mkword(00,r)
@@ -684,6 +654,7 @@ main {
 
   sub paste_line_above() {
     if view.CLIPBOARD == 0 { ; indicates empty clipboard (nothing copied yet)
+      warn("Clipboard is empty ..")
       return
     }
 
@@ -712,7 +683,7 @@ main {
     draw_screen()     ; should be draw_screen(), but this is a much simpler function to debug with
     txt.plot(c,r+1)
 
-    info("PASTED ABOVE!")
+    info("P ...")
 
     doc.unsaved = true
 
@@ -723,6 +694,7 @@ main {
 
   sub paste_line_below() {
     if view.CLIPBOARD == 0 { ; indicates empty clipboard (nothing copied yet)
+      warn("Clipboard is empty ..")
       return
     }
 
@@ -749,7 +721,7 @@ main {
     draw_screen()     ; should be draw_screen(), but this is a much simpler function to debug with
     txt.plot(c,r+1)
 
-    info("PASTED BELOW!")
+    info("p ...")
 
     doc.unsaved = true
 
@@ -782,7 +754,7 @@ main {
     draw_screen()     ; should be draw_screen(), but this is a much simpler function to debug with
     txt.plot(c,r+1)
 
-    info("ADDED LINE ABOVE!")
+    info("O ...")
 
     doc.unsaved = true
 
@@ -813,7 +785,7 @@ main {
     draw_screen()     ; should be draw_screen(), but this is a much simpler function to debug with
     txt.plot(c,r+1)
 
-    info("ADDED LINE ABOVE!")
+    info("o ...")
 
     doc.unsaved = true
 
@@ -1106,6 +1078,12 @@ main {
     printw(view.CURR_TOP_LINE)
     prints(" - BOT: ")
     printw(view.CURR_TOP_LINE+view.HEIGHT-1)
+    txt.plot(79-9, view.r())
+    if doc.unsaved == true {
+      txt.color2($6,$1)
+      prints("(UNSAVED)")
+      txt.color2($1,$6)
+    } 
     txt.plot(X,Y)
   }
 
@@ -1148,4 +1126,42 @@ main {
 ;    txt.nl()
 ;  }
 
+  sub info(str message) {
+    alert(message, 15, $7, $6)
+  }
+
+  sub warn(str message) {
+    alert(message, 120, $2, $1)
+  }
+
+  sub alert(str message, ubyte delay, ubyte color1, ubyte color2) {
+    ubyte length = strings.length(message)
+    txt.plot(78-length, 0)
+    txt.color2(color1, color2)
+    prints(message)
+    sys.wait(delay)
+    txt.plot(78-length, 0)
+    txt.color2($1, $6) ; sets text back to default, white on blue
+    txt.plot(view.LEFT_MARGIN, 0)
+    prints(view.BLANK_LINE)
+  }
+
+  sub infoW(uword message) {
+    alertW(message, 15, $7, $6)
+  }
+
+  sub warnW(uword message) {
+    alertW(message, 120, $2, $1)
+  }
+
+  sub alertW(uword message, ubyte delay, ubyte color1, ubyte color2) {
+    txt.plot(74, 0)
+    txt.color2(color1, color2)
+    printW(message)
+    sys.wait(delay)
+    txt.plot(74, 0)
+    txt.color2($1, $6) ; sets text back to default, white on blue
+    txt.plot(view.LEFT_MARGIN, 0)
+    prints(view.BLANK_LINE)
+  }
 }
