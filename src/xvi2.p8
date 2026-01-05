@@ -77,7 +77,7 @@ view {
     ; which is new_idx+1, since we're decrementing; ensures old contents in new_idx
     ; get copied into the slot 'below' it ...
     for i in last_idx downto new_idx+1 step -1 {
-      ubyte idx = (i as ubyte) - 1
+      ubyte idx = i as ubyte
       view.INDEX[idx] = view.INDEX[idx-1]
     }
 
@@ -420,6 +420,7 @@ main {
 ; - do not write contiguous spaces (fully blank linkes, trim when writing)
 
 ; DOING: <- start here!!
+; - address remaining artifacts and inconsistencies in do_dd's paging and cursor placement ***
 ; - replace mode <esc>r
 ; - :e on splash to start new document buffer
 ; - ...
@@ -434,6 +435,7 @@ main {
 ; ---- used main.lineCount, there might still be a bug between strings.slice + Document.lineCount
 ; - make sure existing file is overwritten on forced save ...
 ; - q! - force quit
+; - fixed o, O, p, P - made them consistent with cursor and paging behavior
 
     ubyte char = 0 
     ubyte col
@@ -444,13 +446,13 @@ main {
       row = view.r()
 
       when char {
-        ;$0c -> {  ; this is a "form feed", and I have no idea why I put this here
-        ;  view.CURR_TOP_LINE = 1
-        ;  draw_initial_screen()
-        ;  cursor.replace(view.LEFT_MARGIN, view.TOP_LINE)
-        ;  main.update_tracker()
-        ;  main.MODE = mode.NAV
-        ;}
+        $0c -> {  ; this is a "form feed", and I have no idea why I put this here
+          view.CURR_TOP_LINE = 1
+          draw_initial_screen()
+          cursor.replace(view.LEFT_MARGIN, view.TOP_LINE)
+          main.update_tracker()
+          main.MODE = mode.NAV
+        }
         $1b -> {       ; ESC key, throw into NAV mode from any other mode
           main.MODE = mode.NAV
         }
@@ -647,9 +649,9 @@ main {
   }
 
   sub get_Line_addr(ubyte r) -> uword {
-    uword curr_line = main.get_line_num(r)
-    ubyte idx = (curr_line as ubyte) - 1
-    return view.INDEX[idx]
+    uword curr_line = main.get_line_num(r) ; 1-based
+    ubyte idxw = (curr_line as ubyte) - 1  ; 0-based
+    return view.INDEX[idxw]                ; only OK if you guarantee idxw <= 255
   }
 
   sub paste_line_above() {
@@ -680,14 +682,25 @@ main {
     void debug.assert(view.INDEX[curr_line as ubyte - 1], new_prev, debug.EQ, "INDEX[curr_line as ubyte - 1] == new_prev")
     void debug.assert(view.INDEX[curr_line as ubyte], curr_addr, debug.EQ, "INDEX[curr_line as ubyte] == curr_addr")
 
-    draw_screen()     ; should be draw_screen(), but this is a much simpler function to debug with
-    txt.plot(c,r+1)
-
     info("P ...")
-
     doc.unsaved = true
 
-    cursor.replace(c, r+1)
+    if r == view.TOP_LINE {
+      draw_screen()
+      txt.plot(view.LEFT_MARGIN,r)
+      cursor.replace(view.LEFT_MARGIN,r)
+    }
+    else if r == view.BOTTOM_LINE {
+      draw_screen()
+      txt.plot(view.LEFT_MARGIN,r)
+      cursor.replace(view.LEFT_MARGIN,r)
+    }
+    else {
+      draw_screen()
+      txt.plot(view.LEFT_MARGIN,r)
+      cursor.replace(view.LEFT_MARGIN,r)
+    }
+
     main.update_tracker()
   }
 
@@ -718,19 +731,30 @@ main {
     void debug.assert(view.INDEX[curr_line as ubyte - 1], curr_addr, debug.EQ, "INDEX[curr_line as ubyte - 1] == curr_addr")
     void debug.assert(view.INDEX[curr_line as ubyte], new_next, debug.EQ, "INDEX[curr_line as ubyte] == new_next")
 
-    draw_screen()     ; should be draw_screen(), but this is a much simpler function to debug with
-    txt.plot(c,r+1)
-
     info("p ...")
-
     doc.unsaved = true
 
-    cursor.replace(c, r+1)
+    if r == view.TOP_LINE {
+      draw_screen()
+      txt.plot(view.LEFT_MARGIN,r+1)
+      cursor.replace(view.LEFT_MARGIN,r+1)
+    }
+    else if r == view.BOTTOM_LINE {
+      incr_top_line(1)
+      draw_screen()
+      txt.plot(view.LEFT_MARGIN,r)
+      cursor.replace(view.LEFT_MARGIN,r)
+    }
+    else {
+      draw_screen()
+      txt.plot(view.LEFT_MARGIN,r+1)
+      cursor.replace(view.LEFT_MARGIN,r+1)
+    }
+
     main.update_tracker()
   }
 
   sub insert_line_above() {
-    ubyte c = view.c()
     ubyte r = view.r()
 
     uword curr_line = main.get_line_num(r) ; next_line is +1
@@ -751,14 +775,25 @@ main {
     void debug.assert(view.INDEX[curr_line as ubyte - 1], new_prev, debug.EQ, "INDEX[curr_line as ubyte - 1] == new_prev")
     void debug.assert(view.INDEX[curr_line as ubyte], curr_addr, debug.EQ, "INDEX[curr_line as ubyte] == curr_addr")
 
-    draw_screen()     ; should be draw_screen(), but this is a much simpler function to debug with
-    txt.plot(c,r+1)
-
     info("O ...")
-
     doc.unsaved = true
 
-    cursor.replace(c, r+1)
+    if r == view.TOP_LINE {
+      draw_screen()
+      txt.plot(view.LEFT_MARGIN,r)
+      cursor.replace(view.LEFT_MARGIN,r)
+    }
+    else if r == view.BOTTOM_LINE {
+      draw_screen()
+      txt.plot(view.LEFT_MARGIN,r)
+      cursor.replace(view.LEFT_MARGIN,r)
+    }
+    else {
+      draw_screen()
+      txt.plot(view.LEFT_MARGIN,r)
+      cursor.replace(view.LEFT_MARGIN,r)
+    }
+
     main.update_tracker()
   }
 
@@ -786,39 +821,52 @@ main {
     txt.plot(c,r+1)
 
     info("o ...")
-
     doc.unsaved = true
 
-    cursor.replace(c, r+1)
+    if r == view.TOP_LINE {
+      draw_screen()
+      txt.plot(view.LEFT_MARGIN,r+1)
+      cursor.replace(view.LEFT_MARGIN,r+1)
+    }
+    else if r == view.BOTTOM_LINE {
+      incr_top_line(1)
+      draw_screen()
+      txt.plot(view.LEFT_MARGIN,r)
+      cursor.replace(view.LEFT_MARGIN,r)
+    }
+    else {
+      draw_screen()
+      txt.plot(view.LEFT_MARGIN,r+1)
+      cursor.replace(view.LEFT_MARGIN,r+1)
+    }
+
     main.update_tracker()
   }
 
   sub do_yy() {
+    ubyte c = view.c()
+    ubyte r = view.r()
+
     info("yy")
 
-    ubyte col = view.c()
-    ubyte row = view.r()
-
-    ^^Line curr_addr = get_Line_addr(row) ; line being deleted
+    ^^Line curr_addr = get_Line_addr(r) ; line being deleted
 
     view.CLIPBOARD = curr_addr
 
-    warnH(view.CLIPBOARD)
-
-    cursor.replace(col, row)
+    cursor.replace(c, r)
     main.update_tracker()
   }
 
   sub do_dd() {
+    ubyte c = view.c()
+    ubyte r = view.r()
+
     info("dd")
     cursor.hide()
 
-    ubyte col = view.c()
-    ubyte row = view.r()
-
-    ^^Line curr_addr = get_Line_addr(row) ; line being deleted
-    ^^Line prev_addr = curr_addr.prev     ; line before line being deleted
-    ^^Line next_addr = curr_addr.next     ; line after line being deleted
+    ^^Line curr_addr = get_Line_addr(r) ; line being deleted
+    ^^Line prev_addr = curr_addr.prev   ; line before line being deleted
+    ^^Line next_addr = curr_addr.next   ; line after line being deleted
 
     ; track "freed" Lines, returns index in view.FREE
     void view.push_freed(curr_addr)
@@ -829,7 +877,7 @@ main {
       next_addr.prev = prev_addr
     }
 
-    main.lineCount = view.delete_item(main.get_line_num(row), main.lineCount)
+    main.lineCount = view.delete_item(main.get_line_num(r), main.lineCount)
 
     draw_screen()
 
@@ -837,7 +885,7 @@ main {
 
     doc.unsaved = true
 
-    cursor.replace(col, row)
+    cursor.replace(c, r)
     main.update_tracker()
   }
 
@@ -869,16 +917,16 @@ main {
         i = view.HEIGHT
       }
       txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
-      ubyte row = view.TOP_LINE
+      ubyte r = view.TOP_LINE
       uword lineNum = 1
       repeat i {
-        txt.plot(0, row)
+        txt.plot(0, r)
         printLineNum(lineNum)
-        txt.plot(view.LEFT_MARGIN,row)
+        txt.plot(view.LEFT_MARGIN,r)
         ^^Line line = addr
         say(line.text)
         addr = line.next
-        row++
+        r++
         lineNum++
       }
   }
@@ -886,7 +934,7 @@ main {
   sub draw_screen () {               ; NOTE: assumes view.CURR_TOP_LINE is correct
       ubyte idx = (view.CURR_TOP_LINE as ubyte) - 1
       ^^Line line = view.INDEX[idx]
-      ubyte row
+      ubyte r
       txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
       ubyte m,n
       uword remaining = main.lineCount - view.CURR_TOP_LINE + 1
@@ -900,12 +948,12 @@ main {
       }
       uword lineNum = view.CURR_TOP_LINE
       repeat m {
-        row = view.r()
-        txt.plot(0, row)
+        r = view.r()
+        txt.plot(0, r)
         prints(view.BLANK_LINE)
-        txt.plot(0, row)
+        txt.plot(0, r)
         printLineNum(lineNum)
-        txt.plot(view.LEFT_MARGIN, row)
+        txt.plot(view.LEFT_MARGIN, r)
         say(line.text)
     
         ; get next Line
@@ -913,9 +961,9 @@ main {
         lineNum++
       }
       repeat n {
-        row = view.r()
+        r = view.r()
         prints(view.BLANK_LINE)
-        txt.plot(0,row)
+        txt.plot(0,r)
         say("~")
       }
   }
