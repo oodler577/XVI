@@ -801,9 +801,12 @@ main {
 
     ^^Line curr_addr = get_Line_addr(row) ; line being deleted
 
-    view.CLIPBOARD   = curr_addr
+    view.CLIPBOARD = curr_addr
+
+    warnH(view.CLIPBOARD)
 
     cursor.replace(col, row)
+    main.update_tracker()
   }
 
   sub do_dd() {
@@ -1141,14 +1144,14 @@ sub cursor_down_on_j () {
     txt.print_uw(x) 
   }
 
-;  sub printH (uword x) {
-;    txt.print_uwhex(x, true)
-;  }
-;
-;  sub sayH (uword x) {
-;    main.printH(x)
-;    txt.nl()
-;  }
+  sub printH (uword x) {
+    txt.print_uwhex(x, true)
+  }
+
+  sub sayH (uword x) {
+    main.printH(x)
+    txt.nl()
+  }
 
   sub info(str message) {
     alert(message, 15, $7, $6)
@@ -1182,6 +1185,25 @@ sub cursor_down_on_j () {
     txt.plot(74, 0)
     txt.color2(color1, color2)
     printW(message)
+    sys.wait(delay)
+    txt.plot(74, 0)
+    txt.color2($1, $6) ; sets text back to default, white on blue
+    txt.plot(view.LEFT_MARGIN, 0)
+    prints(view.BLANK_LINE)
+  }
+
+  sub infoH(uword message) {
+    alertH(message, 15, $7, $6)
+  }
+
+  sub warnH(uword message) {
+    alertH(message, 120, $2, $1)
+  }
+
+  sub alertH(uword message, ubyte delay, ubyte color1, ubyte color2) {
+    txt.plot(74, 0)
+    txt.color2(color1, color2)
+    printH(message)
     sys.wait(delay)
     txt.plot(74, 0)
     txt.color2($1, $6) ; sets text back to default, white on blue
