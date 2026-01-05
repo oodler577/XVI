@@ -808,6 +808,7 @@ main {
 
   sub do_dd() {
     info("dd")
+    cursor.hide()
 
     ubyte col = view.c()
     ubyte row = view.r()
@@ -835,7 +836,6 @@ main {
 
     cursor.replace(col, row)
     main.update_tracker()
-
   }
 
   sub incr_top_line(uword value) -> uword {
@@ -883,17 +883,17 @@ main {
   sub draw_screen () {               ; NOTE: assumes view.CURR_TOP_LINE is correct
       ubyte idx = (view.CURR_TOP_LINE as ubyte) - 1
       ^^Line line = view.INDEX[idx]
-      void view.c()
       ubyte row
       txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
       ubyte m,n
-      if (main.lineCount / view.CURR_TOP_LINE > 1) {
+      uword remaining = main.lineCount - view.CURR_TOP_LINE + 1
+      if remaining >= view.HEIGHT {
         m = view.HEIGHT
         n = 0
       }
       else {
-        m = (main.lineCount % view.CURR_TOP_LINE) as ubyte + 1
-        n = view.HEIGHT - (main.lineCount - view.CURR_TOP_LINE) as ubyte - 1
+        m = remaining as ubyte
+        n = (view.HEIGHT - remaining) as ubyte
       }
       uword lineNum = view.CURR_TOP_LINE
       repeat m {
@@ -1021,31 +1021,55 @@ main {
     main.update_tracker()
   }
 
-  sub cursor_down_on_j () {
-    ; j (down) from going past main.lineCount
-    if view.CURR_TOP_LINE == main.lineCount - view.HEIGHT + 1 and view.r() == view.BOTTOM_LINE {
-      return
-    }
-    ubyte curr_line = view.r()
-    ubyte curr_col  = view.c()
-    ubyte next_line = curr_line+1;
-    if curr_line == view.BOTTOM_LINE {
-      cursor.hide()
-      void incr_top_line(1)         ; increment CURR_TOP_LINE
-      txt.plot(0, view.FOOTER_LINE) ; blank footer line
-      prints(view.BLANK_LINE)
-      txt.plot(0, 1)    ; blank top line
-      say(view.BLANK_LINE)
-      prints(view.BLANK_LINE)
-      txt.scroll_up()
-      draw_bottom_line(view.CURR_TOP_LINE+view.HEIGHT-1)
-      cursor.replace(curr_col, curr_line)
-    }
-    else if next_line < main.lineCount+view.TOP_LINE {
-      cursor.place(view.c(), next_line)
-    }
-    main.update_tracker()
+sub cursor_down_on_j () {
+  ; j (down) from going past main.lineCount
+
+  ; compute last possible top line (clamp so it never underflows)
+  uword lastTop
+  if main.lineCount > view.HEIGHT {
+    lastTop = main.lineCount - view.HEIGHT + 1
+  } else {
+    lastTop = 1
   }
+
+  ; if we're already showing the last page and the cursor is on the bottom row, stop
+  if view.CURR_TOP_LINE == lastTop and view.r() == view.BOTTOM_LINE {
+    return
+  }
+
+  ubyte curr_line = view.r()
+  ubyte curr_col  = view.c()
+  ubyte next_line = curr_line + 1
+
+  if curr_line == view.BOTTOM_LINE {
+    cursor.hide()
+    void incr_top_line(1)          ; increment CURR_TOP_LINE
+
+    txt.plot(0, view.FOOTER_LINE)  ; blank footer line
+    prints(view.BLANK_LINE)
+
+    txt.plot(0, 1)                 ; blank top line
+    say(view.BLANK_LINE)
+    prints(view.BLANK_LINE)
+
+    txt.scroll_up()
+    draw_bottom_line(view.CURR_TOP_LINE + view.HEIGHT - 1)
+
+    cursor.replace(curr_col, curr_line)
+  } else {
+    ; Only move the cursor down if there is a real document line there.
+    ; Map current screen row -> document line number:
+    ; docLine = CURR_TOP_LINE + (screenRow - TOP_LINE)
+    uword docLine = view.CURR_TOP_LINE + (curr_line - view.TOP_LINE)
+
+    if docLine < main.lineCount {
+      cursor.place(curr_col, next_line)
+    }
+  }
+
+  main.update_tracker()
+}
+
 
   sub cursor_left_on_h () {
     if view.c() > view.LEFT_MARGIN {
