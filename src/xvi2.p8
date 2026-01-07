@@ -596,15 +596,39 @@ main {
             main.paste_line_below()
           }
         }
+        'r' -> { ; replace char
+          if main.MODE == mode.NAV {
+            RLOOP:
+            void, char = cbm.GETIN()
+            when char {
+              $1b -> {       ; ESC key, throw into NAV mode from any other mode
+                main.MODE = mode.NAV
+                goto NAVCHARLOOP 
+              }
+              $20 to $7f -> {
+                goto REPLACECHAR
+              }
+            }
+            goto RLOOP
+            REPLACECHAR: 
+            main.replace_char(char)
+          }
+        }
+        'x' -> {
+          if main.MODE == mode.NAV {
+            main.delete_xy_shift_left()
+          }
+        }
+
         ; N A V I G A T I O N
         'g' -> {
           if main.MODE == mode.NAV {
-           jump_to_begin()
+            jump_to_begin()
           }
         }
         'G' -> {
           if main.MODE == mode.NAV {
-           jump_to_end()
+            jump_to_end()
           }
         }
         'k',$91 -> {       ;  UP
@@ -665,7 +689,7 @@ main {
 
     uword curr_line = main.get_line_num(r) ; next_line is +1
 
-    ^^Line curr_addr = get_Line_addr(r)        ; gets memory addr of current Line
+    ^^Line curr_addr = get_Line_addr(r)    ; gets memory addr of current Line
     ^^Line old_prev  = curr_addr.prev
     ^^Line copy_addr = view.CLIPBOARD
     ^^Line new_prev  = main.allocNewLine(copy_addr.text) ; new line with text from copied address
@@ -1072,55 +1096,101 @@ main {
     main.update_tracker()
   }
 
-sub cursor_down_on_j () {
-  ; j (down) from going past main.lineCount
-
-  ; compute last possible top line (clamp so it never underflows)
-  uword lastTop
-  if main.lineCount > view.HEIGHT {
-    lastTop = main.lineCount - view.HEIGHT + 1
-  } else {
-    lastTop = 1
-  }
-
-  ; if we're already showing the last page and the cursor is on the bottom row, stop
-  if view.CURR_TOP_LINE == lastTop and view.r() == view.BOTTOM_LINE {
-    return
-  }
-
-  ubyte curr_line = view.r()
-  ubyte curr_col  = view.c()
-  ubyte next_line = curr_line + 1
-
-  if curr_line == view.BOTTOM_LINE {
-    cursor.hide()
-    void incr_top_line(1)          ; increment CURR_TOP_LINE
-
-    txt.plot(0, view.FOOTER_LINE)  ; blank footer line
-    prints(view.BLANK_LINE)
-
-    txt.plot(0, 1)                 ; blank top line
-    say(view.BLANK_LINE)
-    prints(view.BLANK_LINE)
-
-    txt.scroll_up()
-    draw_bottom_line(view.CURR_TOP_LINE + view.HEIGHT - 1)
-
-    cursor.replace(curr_col, curr_line)
-  } else {
-    ; Only move the cursor down if there is a real document line there.
-    ; Map current screen row -> document line number:
-    ; docLine = CURR_TOP_LINE + (screenRow - TOP_LINE)
-    uword docLine = view.CURR_TOP_LINE + (curr_line - view.TOP_LINE)
-
-    if docLine < main.lineCount {
-      cursor.place(curr_col, next_line)
+  sub cursor_down_on_j () {
+    ; j (down) from going past main.lineCount
+  
+    ; compute last possible top line (clamp so it never underflows)
+    uword lastTop
+    if main.lineCount > view.HEIGHT {
+      lastTop = main.lineCount - view.HEIGHT + 1
+    } else {
+      lastTop = 1
     }
+  
+    ; if we're already showing the last page and the cursor is on the bottom row, stop
+    if view.CURR_TOP_LINE == lastTop and view.r() == view.BOTTOM_LINE {
+      return
+    }
+  
+    ubyte curr_line = view.r()
+    ubyte curr_col  = view.c()
+    ubyte next_line = curr_line + 1
+  
+    if curr_line == view.BOTTOM_LINE {
+      cursor.hide()
+      void incr_top_line(1)          ; increment CURR_TOP_LINE
+  
+      txt.plot(0, view.FOOTER_LINE)  ; blank footer line
+      prints(view.BLANK_LINE)
+  
+      txt.plot(0, 1)                 ; blank top line
+      say(view.BLANK_LINE)
+      prints(view.BLANK_LINE)
+  
+      txt.scroll_up()
+      draw_bottom_line(view.CURR_TOP_LINE + view.HEIGHT - 1)
+  
+      cursor.replace(curr_col, curr_line)
+    } else {
+      ; Only move the cursor down if there is a real document line there.
+      ; Map current screen row -> document line number:
+      ; docLine = CURR_TOP_LINE + (screenRow - TOP_LINE)
+      uword docLine = view.CURR_TOP_LINE + (curr_line - view.TOP_LINE)
+  
+      if docLine < main.lineCount {
+        cursor.place(curr_col, next_line)
+      }
+    }
+  
+    main.update_tracker()
   }
 
-  main.update_tracker()
-}
+  ; in NAV mode, `r <char>`
+  sub replace_char(ubyte char) {
+    ubyte c = view.c()
+    ubyte r = view.r()
 
+    uword curr_line = main.get_line_num(r) ; next_line is +1
+
+    ^^Line curr_addr = get_Line_addr(r)    ; gets memory addr of current Line
+
+    ; remove char at (c,r) then shift everything to the left
+
+    @(curr_addr.text+c-view.LEFT_MARGIN) = char
+    cursor.saved_char = char
+
+    draw_screen()
+    cursor.replace(c,r)
+
+    txt.plot(c,r)
+    main.update_tracker()
+  }
+
+  sub delete_xy_shift_left() {
+    ubyte c = view.c()
+    ubyte r = view.r()
+
+    uword curr_line = main.get_line_num(r) ; next_line is +1
+
+    ^^Line curr_addr = get_Line_addr(r)    ; gets memory addr of current Line
+
+    ; remove char at (c,r) then shift everything to the left
+
+    @(curr_addr.text+c-view.LEFT_MARGIN) = $20
+    cursor.saved_char = $20
+
+    uword i
+    for i in c to 80-1 {
+      @(curr_addr.text+i-view.LEFT_MARGIN) = @(curr_addr.text+i-view.LEFT_MARGIN+1)
+    }
+    @(curr_addr.text+80-view.LEFT_MARGIN) = $20
+
+    draw_screen()
+    cursor.replace(c,r)
+
+    txt.plot(c,r)
+    main.update_tracker()
+  }
 
   sub cursor_left_on_h () {
     if view.c() > view.LEFT_MARGIN {
