@@ -596,9 +596,11 @@ main {
             main.paste_line_below()
           }
         }
+
+        ; E D I T I N G
         'r' -> { ; replace char
           if main.MODE == mode.NAV {
-            RLOOP:
+            RLOOP1:
             void, char = cbm.GETIN()
             when char {
               $1b -> {       ; ESC key, throw into NAV mode from any other mode
@@ -609,18 +611,59 @@ main {
                 goto REPLACECHAR
               }
             }
-            goto RLOOP
+            goto RLOOP1
             REPLACECHAR: 
             main.replace_char(char)
           }
         }
+        'R' -> { ; replace writing mode
+; TODO - need to get "save_line_buffer" working; then apply it to
+; 'x' and 'r', use this instead of "draw_screen()"
+          if main.MODE == mode.NAV {
+            RLOOP2:
+            void, char = cbm.GETIN()
+            if char == $00 {
+              goto RLOOP2
+            }
+            when char {
+              $1b -> {       ; ESC key, throw into NAV mode from any other mode
+                main.MODE = mode.NAV
+                main.save_line_buffer()
+                goto NAVCHARLOOP 
+              }
+              else -> { ; backspace
+                goto REPLACEMODE
+              }
+            }
+            goto RLOOP2
+            REPLACEMODE: 
+            ;main.replace_char(char)
+            cbm.CHROUT(char)
+            cursor.place(view.c(),view.r())
+            main.update_tracker()
+            goto RLOOP2
+          }
+        }
         'x' -> {
+; TODO - needs to replicate the behavior that it if the remainder
+; of the line is blank, the cursor itself shifts left rather than
+; the contents of the line - may require an "end of line" character??
           if main.MODE == mode.NAV {
             main.delete_xy_shift_left()
           }
         }
 
         ; N A V I G A T I O N
+        '^' -> { ; jump to start of line
+           txt.plot(view.LEFT_MARGIN, view.r())
+           cursor.replace(view.LEFT_MARGIN,view.r())
+           main.update_tracker()
+        }
+        '$' -> { ; jump top end of line
+           txt.plot(view.RIGHT_MARGIN, view.r())
+           cursor.replace(view.RIGHT_MARGIN,view.r())
+           main.update_tracker()
+        }
         'g' -> {
           if main.MODE == mode.NAV {
             jump_to_begin()
@@ -1142,6 +1185,28 @@ main {
       }
     }
   
+    main.update_tracker()
+  }
+
+  sub save_line_buffer() {
+    ubyte c = view.c()
+    ubyte r = view.r()
+
+    uword curr_line = main.get_line_num(r) ; next_line is +1
+
+    ^^Line curr_addr = get_Line_addr(r)    ; gets memory addr of current Line
+    uword i
+    for i in 0 to 78 {
+      @(curr_addr.text+i-view.LEFT_MARGIN) = txt.getchr(view.LEFT_MARGIN+(i as ubyte),r) 
+    }
+
+    txt.plot(view.LEFT_MARGIN,r)
+    prints(view.BLANK_LINE)
+    txt.plot(view.LEFT_MARGIN,r)
+    prints(curr_addr.text)
+    cursor.replace(c,r)
+
+    txt.plot(c,r)
     main.update_tracker()
   }
 
