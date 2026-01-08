@@ -24,7 +24,7 @@ view {
   const ubyte MIDDLE_LINE     = 27
   const ubyte BOTTOM_LINE     = 57 ; row+1 of the last line of the view port (LAST_LINE_IDX)
   const ubyte FOOTER_LINE     = 59
-  str         BLANK_LINE      = " " * 79
+  str         BLANK_LINE      = " " * 76
   uword       CURR_TOP_LINE   = 1  ; tracks which actual doc line is at TOP_LINE
   uword[main.MaxLines] INDEX       ; Line to address look up
   ubyte FREEIDX               = 0
@@ -204,16 +204,15 @@ main {
     ubyte data48, data49, data50, data51, data52, data53, data54, data55
     ubyte data56, data57, data58, data59, data60, data61, data62, data63
     ubyte data64, data65, data66, data67, data68, data69, data70, data71
-    ubyte data72, data73, data74, data75, data76, data77, data78, data79
-    ubyte nullbyte
+    ubyte data72, data73, data74, data75, nullbyte
   }
 
   ^^Document doc
 
-  const uword MaxLength  = 80
+  const uword MaxLength  = 76
   const uword LineSize   = sizeof(Line)
 
-  const uword MaxLines   = 256 
+  const uword MaxLines   = 256
   const uword BufferSize = MaxLines * LineSize
   uword Buffer           = memory("Buffer", BufferSize, 1)
 
@@ -395,7 +394,7 @@ main {
     doc.startBank            = 1 ; for future proofing
     main.lineCount            = 0
     doc.firstLine            = Buffer 
-    doc.filepath             = " " * 81
+    doc.filepath             = " " * 76 
 
     txt.plot(0,1)
     splash()
@@ -602,12 +601,15 @@ main {
           if main.MODE == mode.NAV {
             RLOOP1:
             void, char = cbm.GETIN()
+            if char == $00 {
+              goto RLOOP1
+            }
             when char {
               $1b -> {       ; ESC key, throw into NAV mode from any other mode
                 main.MODE = mode.NAV
                 goto NAVCHARLOOP 
               }
-              $20 to $7f -> {
+              else -> {
                 goto REPLACECHAR
               }
             }
@@ -1188,6 +1190,14 @@ main {
     main.update_tracker()
   }
 
+  ; prints address 'addr' at row 'r'
+  sub redraw_line(^^Line addr, ubyte r) {
+    txt.plot(view.LEFT_MARGIN,r)
+    prints(view.BLANK_LINE)
+    txt.plot(view.LEFT_MARGIN,r)
+    prints(addr.text)
+  }
+
   sub save_line_buffer() {
     ubyte c = view.c()
     ubyte r = view.r()
@@ -1196,16 +1206,14 @@ main {
 
     ^^Line curr_addr = get_Line_addr(r)    ; gets memory addr of current Line
     uword i
-    for i in 0 to 78 {
-      @(curr_addr.text+i-view.LEFT_MARGIN) = txt.getchr(view.LEFT_MARGIN+(i as ubyte),r) 
+    for i in 0 to 78-(view.LEFT_MARGIN-1) {
+      @(curr_addr.text+i) = txt.getchr(view.LEFT_MARGIN+(i as ubyte),r) 
     }
 
-    txt.plot(view.LEFT_MARGIN,r)
-    prints(view.BLANK_LINE)
-    txt.plot(view.LEFT_MARGIN,r)
-    prints(curr_addr.text)
-    cursor.replace(c,r)
+    ; prints address 'curr_addr' at row 'r'
+    redraw_line(curr_addr, r)
 
+    cursor.replace(c,r)
     txt.plot(c,r)
     main.update_tracker()
   }
@@ -1224,7 +1232,9 @@ main {
     @(curr_addr.text+c-view.LEFT_MARGIN) = char
     cursor.saved_char = char
 
-    draw_screen()
+    ; prints address 'curr_addr' at row 'r'
+    redraw_line(curr_addr, r)
+
     cursor.replace(c,r)
 
     txt.plot(c,r)
@@ -1250,7 +1260,9 @@ main {
     }
     @(curr_addr.text+80-view.LEFT_MARGIN) = $20
 
-    draw_screen()
+    ; prints address 'curr_addr' at row 'r'
+    redraw_line(curr_addr, r)
+
     cursor.replace(c,r)
 
     txt.plot(c,r)
