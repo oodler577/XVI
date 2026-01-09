@@ -1,4 +1,13 @@
-; BUGS
+; BUGS (PRIORITY)
+; - o/O + Replace mode is causing weird line redraw
+; --- successive <enter> should create more lines and not leave Replace mode,
+; --- but it's exacerbating VRAM corruption
+
+; DOING: <- start here!!
+; - see BUGS
+; -- <return> during (R)eplace mode should do equivalent of <esc>o (add blank line below)
+; -- working out issues with maintaining proper state info (cursor position, etc)
+; - (on going) ensure consistent tracking of view.MODE (e.g., mode.NAV, mode.REPLACE, etc)
 
 ; TODO:
 ; - o/O need an efficient redraw routine for section affected by shift-down
@@ -8,11 +17,6 @@
 ; - <esc>x needs to replicate the behavior that it if the remainder
 ; --- of the line is blank, the cursor itself shifts left rather than
 ; --- the contents of the line - may require an "end of line" character??
-
-; DOING: <- start here!!
-; - <return> during (R)eplace mode should do equivalent of <esc>o (add blank line below)
-; -- working out issues with maintaining proper state info (cursor position, etc)
-; - (on going) ensure consistent tracking of view.MODE (e.g., mode.NAV, mode.REPLACE, etc)
 
 ; STRETCH TODO:
 ; - ALERTs need to be non-blocking (probably need to use interrupts?)
@@ -640,6 +644,9 @@ main {
             if char == $00 {
               goto RLOOP2
             }
+;
+; TOP PRIORITY - get o/O + Replace mode working; including when <enter> is hit
+;
             when char {
               $1b -> {       ; <esc> key, throw into NAV mode from any other mode
                 main.MODE = mode.NAV
@@ -648,8 +655,8 @@ main {
               }
               $0d -> {       ; <enter> key, adds line below (like <esc>o), stays in replace mode
                 main.MODE = mode.NAV
-                main.save_line_buffer()
                 main.insert_line_below()
+                main.save_line_buffer()
               }
               else -> { ; backspace
                 goto REPLACEMODE
@@ -946,7 +953,6 @@ main {
     ubyte r = view.r()
 
     info("dd")
-    cursor.hide()
 
     ^^Line curr_addr = get_Line_addr(r) ; line being deleted
     ^^Line prev_addr = curr_addr.prev   ; line before line being deleted
