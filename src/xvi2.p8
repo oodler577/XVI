@@ -1,3 +1,44 @@
+; BUGS
+
+; TODO:
+; - o/O need an efficient redraw routine for section affected by shift-down
+; - insert mode  <esc>i (most commonly used writing mode)
+; - add mode status, e.g., "-- REPLACE --" / "-- INSERT --" when in the correct modes
+; - :e on splash to start new document buffer
+; - <esc>x needs to replicate the behavior that it if the remainder
+; --- of the line is blank, the cursor itself shifts left rather than
+; --- the contents of the line - may require an "end of line" character??
+
+; DOING: <- start here!!
+; - <return> during (R)eplace mode should do equivalent of <esc>o (add blank line below)
+; -- working out issues with maintaining proper state info (cursor position, etc)
+; - (on going) ensure consistent tracking of view.MODE (e.g., mode.NAV, mode.REPLACE, etc)
+
+; STRETCH TODO:
+; - ALERTs need to be non-blocking (probably need to use interrupts?)
+; - :set number / :set nonumber (turns line numbers on/off)
+; - wq! - force save, force save and quit
+; - allow many more lines (convert Line to use str instead permanent line)
+; - do not write contiguous spaces (fully blank linkes, trim when writing)
+; - stack based "undo" (p/P, o/O, dd)
+
+; DONE:
+; - address remaining artifacts and inconsistencies in do_dd's paging and cursor placement ***
+; - o/O (or equivalent) should leave editor in (R)eplace mode
+; - :w filetosave.txt
+; - w - blocks if file exists,
+; - foo.txt causes memory overflow (end line was doubling the space taken up in memory)
+; - q - block quit if no save since last time?
+; - w! filename.txt (bug exposed, nav on j stops at some point in the screen)
+; - main.lineCount is getting truncated or reset somehow
+; ---- used main.lineCount, there might still be a bug between strings.slice + Document.lineCount
+; - make sure existing file is overwritten on forced save ...
+; - q! - force quit
+; - fixed o, O, p, P - made them consistent with cursor and paging behavior
+; - fixed scrolling bug with dd on last page
+; - replace character mode <esc>r
+; - replace mode <esc>R ... then <esc> to end
+
 %zeropage basicsafe
 %option no_sysinit
 %encoding iso
@@ -13,7 +54,7 @@ mode {
   const ubyte NAV             = 1  ; modal state for navigation, default state
   const ubyte INSERT          = 2  ; modal state for insert mode, triggered with ctrl-i
   const ubyte REPLACE         = 3  ; modal state for replacement mode, triggered with ctrl-r
-  const ubyte COMMAND         = 4  ; modal state for entering a 
+  const ubyte COMMAND         = 4  ; modal state for entering a command
 }
 
 view {
@@ -24,18 +65,19 @@ view {
   const ubyte MIDDLE_LINE     = 27
   const ubyte BOTTOM_LINE     = 57 ; row+1 of the last line of the view port (LAST_LINE_IDX)
   const ubyte FOOTER_LINE     = 59
-  str         BLANK_LINE      = " " * 76
+  str         BLANK_LINE79    = " " * 79
+  str         BLANK_LINE76    = " " * 76
   uword       CURR_TOP_LINE   = 1  ; tracks which actual doc line is at TOP_LINE
   uword[main.MaxLines] INDEX       ; Line to address look up
   ubyte FREEIDX               = 0
-  uword[main.MaxLines] FREE        ; freed addresses to reuse 
+  uword[main.MaxLines] FREE        ; freed addresses to reuse
   uword       CLIPBOARD       = 0  ; holds the address of the current line we can "paste"
 
   sub push_freed (uword addr) -> ubyte {
     view.FREE[view.FREEIDX] = addr
     ubyte addr_idx = view.FREEIDX
     view.FREEIDX++
-    return addr_idx 
+    return addr_idx
   }
 
   sub r() -> ubyte {
@@ -60,8 +102,8 @@ view {
       view.INDEX[idx] = view.INDEX[idx-1]
     }
 
-    ; finally, insert new address into the new_idx slot 
-    view.INDEX[curr_idx as ubyte] = new_addr 
+    ; finally, insert new address into the new_idx slot
+    view.INDEX[curr_idx as ubyte] = new_addr
 
     return newLineCount
   }
@@ -81,8 +123,8 @@ view {
       view.INDEX[idx] = view.INDEX[idx-1]
     }
 
-    ; finally, insert new address into the new_idx slot 
-    view.INDEX[new_idx as ubyte] = new_addr 
+    ; finally, insert new address into the new_idx slot
+    view.INDEX[new_idx as ubyte] = new_addr
 
     return newLineCount
   }
@@ -143,7 +185,7 @@ cursor {
      ubyte cmdchar
      void strings.copy(" " * 60, cmdBuffer)
      txt.plot(0, view.FOOTER_LINE) ; move cursor to the starting position for writing
-     main.prints(view.BLANK_LINE)
+     main.prints(view.BLANK_LINE79)
      txt.plot(0, view.FOOTER_LINE)
      txt.print(":")
      CMDINPUT:
@@ -155,12 +197,12 @@ cursor {
          ; reads in the command and puts it into view.cmdBuffer for additional
          ; processing in the view code
          ubyte i
-         for i in 0 to strings.length(cmdBuffer) - 1 { 
+         for i in 0 to strings.length(cmdBuffer) - 1 {
            cmdBuffer[i] = txt.getchr(1+i, view.FOOTER_LINE)
          }
          strings.strip(cursor.cmdBuffer)
          return;
-       } 
+       }
      goto CMDINPUT
   }
 
@@ -194,7 +236,7 @@ main {
   struct Line {
     ^^Line prev
     ^^Line next
-    ^^ubyte text 
+    ^^ubyte text
     ubyte data00, data01, data02, data03, data04, data05, data06, data07
     ubyte data08, data09, data10, data11, data12, data13, data14, data15
     ubyte data16, data17, data18, data19, data20, data21, data22, data23
@@ -217,17 +259,17 @@ main {
   uword Buffer           = memory("Buffer", BufferSize, 1)
 
   ^^Line next = Buffer
-  ^^Line head = 0 ; points to first line 
+  ^^Line head = 0 ; points to first line
   ^^Line tail = 0 ; points to last line
 
   ; Allocator for linked list of Line instances contributed
   ; by MarkTheStrange on #prog8-dev
   sub allocLine(^^ubyte initial) -> ^^Line {
-    ^^Line this = next                   ; return next space 
+    ^^Line this = next                   ; return next space
     next += 1                            ; advance to end of struct
-    uword txtbuf = next as uword         ; use space after struct as buffer for text 
+    uword txtbuf = next as uword         ; use space after struct as buffer for text
     next = next as uword + MaxLength + 1 ; and advance past buffer space
-    ; link the new line in 
+    ; link the new line in
     if head == 0 {
         head = this
     } else {
@@ -246,17 +288,16 @@ main {
   }
 
   sub allocNewLine(^^ubyte initial) -> ^^Line {
-    ^^Line this = next                   ; return next space 
+    ^^Line this = next                   ; return next space
     next += 1                            ; advance to end of struct
-    uword txtbuf = next as uword         ; use space after struct as buffer for text 
+    uword txtbuf = next as uword         ; use space after struct as buffer for text
     next = next as uword + MaxLength + 1 ; and advance past buffer space
     ; populate the fields
-    this.prev = 0 
+    this.prev = 0
     this.next = 0
     this.text = txtbuf
     strings.trim(initial)
-    void strings.copy(view.BLANK_LINE, this.text) ; initialize with BLANK_LINE, eliminates random garbage
-
+    void strings.copy(view.BLANK_LINE79, this.text) ; initialize with BLANK_LINE79, eliminates random garbage
     void strings.copy(initial, this.text)         ; then add text
     return this
   }
@@ -292,9 +333,9 @@ main {
         strings.rstrip(lineBuffer)
         if length > MaxLength {
           str tmp = " " * (MaxLength + 1)
-          strings.slice(lineBuffer, 0, MaxLength, tmp) 
+          strings.slice(lineBuffer, 0, MaxLength, tmp)
           void strings.copy(tmp, lineBuffer)
-        } 
+        }
         uword lineAddr = allocLine(lineBuffer)
         idx = main.lineCount as ubyte
         view.INDEX[idx] = lineAddr
@@ -311,7 +352,7 @@ main {
       }
       else {
         txt.plot(0, view.BOTTOM_LINE)
-        prints(view.BLANK_LINE)
+        prints(view.BLANK_LINE79)
         txt.plot(view.LEFT_MARGIN, view.BOTTOM_LINE)
         txt.print("can't open file after 15 attempts ...")
         sys.wait(120)
@@ -325,7 +366,7 @@ main {
     txt.plot(0,view.TOP_LINE)
     repeat 20 {
       txt.plot(0, txt.get_row())
-      say("~") 
+      say("~")
     }
     say("~                             XVI - Commander X16 Vi               ")
     say("~                                                                  ")
@@ -342,7 +383,7 @@ main {
     say("~                  type  :help version2<Enter> for version info    ")
     repeat 24 {
       txt.plot(0, txt.get_row())
-      say("~") 
+      say("~")
     }
   }
 
@@ -393,8 +434,8 @@ main {
     doc.charset              = 0 ; for future proofing
     doc.startBank            = 1 ; for future proofing
     main.lineCount            = 0
-    doc.firstLine            = Buffer 
-    doc.filepath             = " " * 76 
+    doc.firstLine            = Buffer
+    doc.filepath             = " " * 76
 
     txt.plot(0,1)
     splash()
@@ -406,37 +447,8 @@ main {
 
     main.update_tracker()
     main.MODE = mode.NAV
-; BUGS
-; - scrolling bug with dd on last page
 
-; TODO: 
-; - insert mode  <esc>i (most commonly used writing mode)
-; - stack based "undo" (p/P, o/O, dd)
-; - ALERTs need to be non-blocking (probably need to use interrupts?)
-; - :set number / :set nonumber (turns line numbers on/off)
-; - wq! - force save, force save and quit
-; - allow many more lines (convert Line to use str instead permanent line)
-; - do not write contiguous spaces (fully blank linkes, trim when writing)
-
-; DOING: <- start here!!
-; - address remaining artifacts and inconsistencies in do_dd's paging and cursor placement ***
-; - replace mode <esc>r
-; - :e on splash to start new document buffer
-; - ...
-
-; DONE:
-; - :w filetosave.txt
-; - w - blocks if file exists,
-; - foo.txt causes memory overflow (end line was doubling the space taken up in memory)
-; - q - block quit if no save since last time?
-; - w! filename.txt (bug exposed, nav on j stops at some point in the screen)
-; - main.lineCount is getting truncated or reset somehow
-; ---- used main.lineCount, there might still be a bug between strings.slice + Document.lineCount
-; - make sure existing file is overwritten on forced save ...
-; - q! - force quit
-; - fixed o, O, p, P - made them consistent with cursor and paging behavior
-
-    ubyte char = 0 
+    ubyte char = 0
     ubyte col
     ubyte row
     NAVCHARLOOP:
@@ -464,7 +476,7 @@ main {
 
             ; clear command line
             txt.plot(0, view.FOOTER_LINE)
-            prints(view.BLANK_LINE)
+            prints(view.BLANK_LINE79)
             main.update_tracker()
 
             ; sets the string index to do the strings.slice below, will change if there is a "!"
@@ -479,7 +491,7 @@ main {
 
             ubyte cmd_offset = 1
             bool force = false
-            if cursor.cmdBuffer[1] == $21 { ; $21 is "!" 
+            if cursor.cmdBuffer[1] == $21 { ; $21 is "!"
               force = true
               cmd_offset = 2
             }
@@ -523,7 +535,7 @@ main {
                   else {
                     diskio.delete(fn1)
                     save_as(fn1)
-                    void strings.copy(fn1, doc.filepath) 
+                    void strings.copy(fn1, doc.filepath)
                   }
                 }
                 else {
@@ -548,11 +560,11 @@ main {
             when char {
               $1b -> {       ; ESC key, throw into NAV mode from any other mode
                 main.MODE = mode.NAV
-                goto NAVCHARLOOP 
+                goto NAVCHARLOOP
               }
               'd' -> {
                 main.do_dd()
-                goto NAVCHARLOOP 
+                goto NAVCHARLOOP
               }
             }
             goto DDLOOP
@@ -561,11 +573,13 @@ main {
         'O' -> {
           if main.MODE == mode.NAV {
             main.insert_line_above()
+            goto RLOOP2 ; REPLACE mode, start editing blank line immediately
           }
         }
         'o' -> {
           if main.MODE == mode.NAV {
             main.insert_line_below()
+            goto RLOOP2 ; REPLACE mode, start editing blank line immediately
           }
         }
         'y' -> {
@@ -575,11 +589,11 @@ main {
             when char {
               $1b -> {       ; ESC key, throw into NAV mode from any other mode
                 main.MODE = mode.NAV
-                goto NAVCHARLOOP 
+                goto NAVCHARLOOP
               }
               'y' -> {
                 main.do_yy()
-                goto NAVCHARLOOP 
+                goto NAVCHARLOOP
               }
             }
             goto YYLOOP
@@ -607,38 +621,42 @@ main {
             when char {
               $1b -> {       ; ESC key, throw into NAV mode from any other mode
                 main.MODE = mode.NAV
-                goto NAVCHARLOOP 
+                goto NAVCHARLOOP
               }
               else -> {
                 goto REPLACECHAR
               }
             }
             goto RLOOP1
-            REPLACECHAR: 
+            REPLACECHAR:
             main.replace_char(char)
           }
         }
         'R' -> { ; replace writing mode
-; TODO - need to get "save_line_buffer" working; then apply it to
-; 'x' and 'r', use this instead of "draw_screen()"
           if main.MODE == mode.NAV {
             RLOOP2:
+            main.MODE = mode.REPLACE
             void, char = cbm.GETIN()
             if char == $00 {
               goto RLOOP2
             }
             when char {
-              $1b -> {       ; ESC key, throw into NAV mode from any other mode
+              $1b -> {       ; <esc> key, throw into NAV mode from any other mode
                 main.MODE = mode.NAV
                 main.save_line_buffer()
-                goto NAVCHARLOOP 
+                goto NAVCHARLOOP
+              }
+              $0d -> {       ; <enter> key, adds line below (like <esc>o), stays in replace mode
+                main.MODE = mode.NAV
+                main.save_line_buffer()
+                main.insert_line_below()
               }
               else -> { ; backspace
                 goto REPLACEMODE
               }
             }
             goto RLOOP2
-            REPLACEMODE: 
+            REPLACEMODE:
             ;main.replace_char(char)
             cbm.CHROUT(char)
             cursor.place(view.c(),view.r())
@@ -647,9 +665,6 @@ main {
           }
         }
         'x' -> {
-; TODO - needs to replicate the behavior that it if the remainder
-; of the line is blank, the cursor itself shifts left rather than
-; the contents of the line - may require an "end of line" character??
           if main.MODE == mode.NAV {
             main.delete_xy_shift_left()
           }
@@ -686,12 +701,12 @@ main {
             cursor_down_on_j()
           }
         }
-        'h',$9d -> {       ; LEFT 
+        'h',$9d -> {       ; LEFT
           if main.MODE == mode.NAV {
             cursor_left_on_h()
           }
         }
-        'l',$1d -> {       ; RIGHT 
+        'l',$1d -> {       ; RIGHT
           if main.MODE == mode.NAV {
             cursor_right_on_l()
           }
@@ -707,7 +722,7 @@ main {
           }
         }
       }
-      goto NAVCHARLOOP 
+      goto NAVCHARLOOP
   }
 
   sub get_line_num(ubyte r) -> uword {
@@ -739,7 +754,7 @@ main {
     ^^Line copy_addr = view.CLIPBOARD
     ^^Line new_prev  = main.allocNewLine(copy_addr.text) ; new line with text from copied address
 
-    old_prev.next  = new_prev 
+    old_prev.next  = new_prev
     new_prev.next  = curr_addr
     curr_addr.prev = new_prev
     new_prev.prev  = old_prev
@@ -790,7 +805,7 @@ main {
     ^^Line new_next  = main.allocNewLine(copy_addr.text) ; new line with text from copied address
 
     new_next.prev  = curr_addr
-    new_next.next  = curr_addr.next 
+    new_next.next  = curr_addr.next
     curr_addr.next = new_next
 
     ;; call to update INDEX
@@ -832,7 +847,7 @@ main {
     ^^Line old_prev  = curr_addr.prev
     ^^Line new_prev  = main.allocNewLine("  ") ; creates new Line instance to insert
 
-    old_prev.next  = new_prev 
+    old_prev.next  = new_prev
     new_prev.next  = curr_addr
     curr_addr.prev = new_prev
     new_prev.prev  = old_prev
@@ -876,7 +891,7 @@ main {
     ^^Line new_next  = main.allocNewLine("  ") ; creates new Line instance to insert
 
     new_next.prev  = curr_addr
-    new_next.next  = curr_addr.next 
+    new_next.next  = curr_addr.next
     curr_addr.next = new_next
 
     ;; call to update INDEX
@@ -962,7 +977,7 @@ main {
     if  view.CURR_TOP_LINE + value <= main.lineCount {
       view.CURR_TOP_LINE += value
     }
-    return view.CURR_TOP_LINE     ; stops ++'ing with the last HEIGHT lines in the document 
+    return view.CURR_TOP_LINE     ; stops ++'ing with the last HEIGHT lines in the document
   }
 
   sub decr_top_line(uword value) -> uword {
@@ -1019,19 +1034,19 @@ main {
       repeat m {
         r = view.r()
         txt.plot(0, r)
-        prints(view.BLANK_LINE)
+        prints(view.BLANK_LINE79)
         txt.plot(0, r)
         printLineNum(lineNum)
         txt.plot(view.LEFT_MARGIN, r)
         say(line.text)
-    
+
         ; get next Line
         line = line.next
         lineNum++
       }
       repeat n {
         r = view.r()
-        prints(view.BLANK_LINE)
+        prints(view.BLANK_LINE79)
         txt.plot(0,r)
         say("~")
       }
@@ -1046,7 +1061,7 @@ main {
       ^^Line line = addr
       addr = line.next
       txt.plot(0, view.BOTTOM_LINE)
-      prints(view.BLANK_LINE)
+      prints(view.BLANK_LINE79)
       txt.plot(0, view.BOTTOM_LINE)
       printLineNum(lineNum)
       txt.plot(view.LEFT_MARGIN, view.BOTTOM_LINE)
@@ -1076,7 +1091,7 @@ main {
       else {
         view.CURR_TOP_LINE = last_page_start
       }
-      draw_screen() 
+      draw_screen()
       cursor.replace(c, view.BOTTOM_LINE)
       main.update_tracker()
   }
@@ -1084,12 +1099,12 @@ main {
   sub page_backward() {
       ubyte c = view.c()
       if view.CURR_TOP_LINE > view.HEIGHT {
-        view.CURR_TOP_LINE = view.CURR_TOP_LINE - view.HEIGHT; 
+        view.CURR_TOP_LINE = view.CURR_TOP_LINE - view.HEIGHT;
       }
       else {
         view.CURR_TOP_LINE = 1
       }
-      draw_screen() 
+      draw_screen()
       cursor.replace(c, view.TOP_LINE)
       main.update_tracker()
   }
@@ -1098,7 +1113,7 @@ main {
       ubyte c = view.c()
       if main.lineCount > view.HEIGHT {
         view.CURR_TOP_LINE = 1
-        draw_screen() 
+        draw_screen()
       }
       cursor.replace(c, view.TOP_LINE)
       main.update_tracker()
@@ -1108,7 +1123,7 @@ main {
       ubyte c = view.c()
       if main.lineCount > view.HEIGHT {
         view.CURR_TOP_LINE = main.lineCount - view.HEIGHT + 1
-        draw_screen() 
+        draw_screen()
         cursor.replace(c, view.BOTTOM_LINE)
       }
       else {
@@ -1130,9 +1145,9 @@ main {
       txt.scroll_down()
       void decr_top_line(1)
       txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
-      draw_top_line(view.CURR_TOP_LINE) 
+      draw_top_line(view.CURR_TOP_LINE)
       txt.plot(0, view.BOTTOM_LINE+1) ; blank footer line
-      prints(view.BLANK_LINE)
+      prints(view.BLANK_LINE79)
       cursor.replace(curr_col, curr_line)
     }
     else {
@@ -1143,7 +1158,7 @@ main {
 
   sub cursor_down_on_j () {
     ; j (down) from going past main.lineCount
-  
+
     ; compute last possible top line (clamp so it never underflows)
     uword lastTop
     if main.lineCount > view.HEIGHT {
@@ -1151,53 +1166,54 @@ main {
     } else {
       lastTop = 1
     }
-  
+
     ; if we're already showing the last page and the cursor is on the bottom row, stop
     if view.CURR_TOP_LINE == lastTop and view.r() == view.BOTTOM_LINE {
       return
     }
-  
+
     ubyte curr_line = view.r()
     ubyte curr_col  = view.c()
     ubyte next_line = curr_line + 1
-  
+
     if curr_line == view.BOTTOM_LINE {
       cursor.hide()
       void incr_top_line(1)          ; increment CURR_TOP_LINE
-  
+
       txt.plot(0, view.FOOTER_LINE)  ; blank footer line
-      prints(view.BLANK_LINE)
-  
+      prints(view.BLANK_LINE79)
+
       txt.plot(0, 1)                 ; blank top line
-      say(view.BLANK_LINE)
-      prints(view.BLANK_LINE)
-  
+      say(view.BLANK_LINE79)
+      prints(view.BLANK_LINE79)
+
       txt.scroll_up()
       draw_bottom_line(view.CURR_TOP_LINE + view.HEIGHT - 1)
-  
+
       cursor.replace(curr_col, curr_line)
     } else {
       ; Only move the cursor down if there is a real document line there.
       ; Map current screen row -> document line number:
       ; docLine = CURR_TOP_LINE + (screenRow - TOP_LINE)
       uword docLine = view.CURR_TOP_LINE + (curr_line - view.TOP_LINE)
-  
+
       if docLine < main.lineCount {
         cursor.place(curr_col, next_line)
       }
     }
-  
+
     main.update_tracker()
   }
 
   ; prints address 'addr' at row 'r'
   sub redraw_line(^^Line addr, ubyte r) {
     txt.plot(view.LEFT_MARGIN,r)
-    prints(view.BLANK_LINE)
+    prints(view.BLANK_LINE76)
     txt.plot(view.LEFT_MARGIN,r)
     prints(addr.text)
   }
 
+  ; save text written to the video RAM and saves it into the document's line buffer
   sub save_line_buffer() {
     ubyte c = view.c()
     ubyte r = view.r()
@@ -1206,8 +1222,8 @@ main {
 
     ^^Line curr_addr = get_Line_addr(r)    ; gets memory addr of current Line
     uword i
-    for i in 0 to 78-(view.LEFT_MARGIN-1) {
-      @(curr_addr.text+i) = txt.getchr(view.LEFT_MARGIN+(i as ubyte),r) 
+    for i in 0 to 78-view.LEFT_MARGIN {
+      @(curr_addr.text+i) = txt.getchr(view.LEFT_MARGIN+(i as ubyte),r)
     }
 
     ; prints address 'curr_addr' at row 'r'
@@ -1287,9 +1303,9 @@ main {
 
   sub update_tracker () {
     ubyte X = view.c()
-    ubyte Y = view.r() 
+    ubyte Y = view.r()
     txt.plot(0, view.FOOTER_LINE)
-    prints(view.BLANK_LINE)
+    prints(view.BLANK_LINE79)
     txt.plot(1, view.FOOTER_LINE)
     printw(main.lineCount)
     prints(" lines, x: ")
@@ -1305,7 +1321,7 @@ main {
       txt.color2($6,$1)
       prints("(UNSAVED)")
       txt.color2($1,$6)
-    } 
+    }
     txt.plot(X,Y)
   }
 
@@ -1324,19 +1340,19 @@ main {
 ;  }
 ;
 ;  sub printb (ubyte x) {
-;    txt.print_ub0(x) 
+;    txt.print_ub0(x)
 ;  }
 ;
 ;  sub printB (ubyte x) {
-;    txt.print_ub(x) 
+;    txt.print_ub(x)
 ;  }
 
   sub printw (uword x) {
-    txt.print_uw0(x) 
+    txt.print_uw0(x)
   }
 
   sub printW (uword x) {
-    txt.print_uw(x) 
+    txt.print_uw(x)
   }
 
   sub printH (uword x) {
@@ -1365,7 +1381,7 @@ main {
     txt.plot(78-length, 0)
     txt.color2($1, $6) ; sets text back to default, white on blue
     txt.plot(view.LEFT_MARGIN, 0)
-    prints(view.BLANK_LINE)
+    prints(view.BLANK_LINE79)
   }
 
   sub infoW(uword message) {
@@ -1384,7 +1400,7 @@ main {
     txt.plot(74, 0)
     txt.color2($1, $6) ; sets text back to default, white on blue
     txt.plot(view.LEFT_MARGIN, 0)
-    prints(view.BLANK_LINE)
+    prints(view.BLANK_LINE79)
   }
 
   sub infoH(uword message) {
@@ -1403,6 +1419,6 @@ main {
     txt.plot(74, 0)
     txt.color2($1, $6) ; sets text back to default, white on blue
     txt.plot(view.LEFT_MARGIN, 0)
-    prints(view.BLANK_LINE)
+    prints(view.BLANK_LINE79)
   }
 }
