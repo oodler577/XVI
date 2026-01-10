@@ -166,6 +166,7 @@ cursor {
 
   sub hide() {
     restore_current_char()
+    saved_char = $20
   }
 
   ; the cursor is the underlying character, with the color scheme inverted
@@ -202,7 +203,7 @@ cursor {
          ; processing in the view code
          ubyte i
          for i in 0 to strings.length(cmdBuffer) - 1 {
-           cmdBuffer[i] = txt.getchr(1+i, view.FOOTER_LINE)
+           cmdBuffer[i] = txt.getchr(i+1, view.FOOTER_LINE)
          }
          strings.strip(cursor.cmdBuffer)
          return;
@@ -619,6 +620,7 @@ main {
           if main.MODE == mode.NAV {
             RLOOP1:
             void, char = cbm.GETIN()
+            ; go back to RLOOP1 if there's nothing input via keyboard
             if char == $00 {
               goto RLOOP1
             }
@@ -636,7 +638,12 @@ main {
             main.replace_char(char)
           }
         }
-        'R' -> { ; replace writing mode
+        'x' -> {
+          if main.MODE == mode.NAV {
+            main.delete_xy_shift_left()
+          }
+        }
+        'R','i' -> { ; edit mode (initially copy of replace writing mode)
           if main.MODE == mode.NAV {
             RLOOP2:
             main.MODE = mode.REPLACE
@@ -644,9 +651,6 @@ main {
             if char == $00 {
               goto RLOOP2
             }
-;
-; TOP PRIORITY - get o/O + Replace mode working; including when <enter> is hit
-;
             when char {
               $1b -> {       ; <esc> key, throw into NAV mode from any other mode
                 main.MODE = mode.NAV
@@ -655,25 +659,31 @@ main {
               }
               $0d -> {       ; <enter> key, adds line below (like <esc>o), stays in replace mode
                 main.MODE = mode.NAV
-                main.insert_line_below()
                 main.save_line_buffer()
+                main.insert_line_below()
               }
               else -> { ; backspace
-                goto REPLACEMODE
+                goto INSERTMODE
               }
             }
             goto RLOOP2
-            REPLACEMODE:
-            ;main.replace_char(char)
+            INSERTMODE:
+            if view.c() < view.LEFT_MARGIN {       ; this is where to handle backspace past left margine
+              cursor.hide()
+              txt.plot(view.LEFT_MARGIN, view.r())
+              cursor.place(view.c(),view.r())
+              goto RLOOP2
+            }
+            if view.c() == view.RIGHT_MARGIN {   ; this is where to handle back
+              cursor.hide()
+              txt.plot(view.RIGHT_MARGIN-1, view.r())
+              cursor.place(view.c(),view.r())
+              goto RLOOP2
+            }
             cbm.CHROUT(char)
             cursor.place(view.c(),view.r())
             main.update_tracker()
             goto RLOOP2
-          }
-        }
-        'x' -> {
-          if main.MODE == mode.NAV {
-            main.delete_xy_shift_left()
           }
         }
 
@@ -696,6 +706,17 @@ main {
         'G' -> {
           if main.MODE == mode.NAV {
             jump_to_end()
+          }
+        }
+        'L' -> { ; redraw current screen
+          if main.MODE == mode.NAV {
+            ubyte c = view.c()
+            ubyte r = view.r()
+            info("redrawing screen ...")
+            draw_screen()
+            txt.plot(c, r)
+            cursor.replace(c, r)
+            main.update_tracker()
           }
         }
         'k',$91 -> {       ;  UP
@@ -845,6 +866,21 @@ main {
     main.update_tracker()
   }
 
+  ; !!! experimental - really need an asmsub like txt.scroll_down, but one that can take
+  ; a starting row
+  sub shift_section_down(ubyte top_row, ubyte bottom_row) {
+    ubyte r,c
+    for r in bottom_row to top_row step -1 {
+      for c in view.LEFT_MARGIN-1 to view.RIGHT_MARGIN {
+        ubyte above = txt.getchr(c-1,r-1)
+        txt.plot(c-1,r)
+        cbm.CHROUT(above)
+      }
+    }
+    txt.plot(view.LEFT_MARGIN, top_row)
+    prints(view.BLANK_LINE76)
+  }
+
   sub insert_line_above() {
     ubyte r = view.r()
 
@@ -880,7 +916,8 @@ main {
       cursor.replace(view.LEFT_MARGIN,r)
     }
     else {
-      draw_screen()
+      ;draw_screen()
+      shift_section_down(r, view.BOTTOM_LINE) 
       txt.plot(view.LEFT_MARGIN,r)
       cursor.replace(view.LEFT_MARGIN,r)
     }
@@ -891,6 +928,8 @@ main {
   sub insert_line_below() {
     ubyte c = view.c()
     ubyte r = view.r()
+
+    cursor.hide()
 
     uword curr_line = main.get_line_num(r) ; next_line is +1
 
@@ -908,9 +947,6 @@ main {
     void debug.assert(view.INDEX[curr_line as ubyte - 1], curr_addr, debug.EQ, "INDEX[curr_line as ubyte - 1] == curr_addr")
     void debug.assert(view.INDEX[curr_line as ubyte], new_next, debug.EQ, "INDEX[curr_line as ubyte] == new_next")
 
-    draw_screen()     ; should be draw_screen(), but this is a much simpler function to debug with
-    txt.plot(c,r+1)
-
     info("o ...")
     doc.unsaved = true
 
@@ -926,9 +962,9 @@ main {
       cursor.replace(view.LEFT_MARGIN,r)
     }
     else {
-      draw_screen()
+      shift_section_down(r+1, view.BOTTOM_LINE) 
       txt.plot(view.LEFT_MARGIN,r+1)
-      cursor.replace(view.LEFT_MARGIN,r+1)
+      cursor.place(view.LEFT_MARGIN,r+1)
     }
 
     main.update_tracker()
@@ -1212,11 +1248,15 @@ main {
   }
 
   ; prints address 'addr' at row 'r'
-  sub redraw_line(^^Line addr, ubyte r) {
+  sub redraw_line(^^Line addr, ubyte r) -> ubyte {
     txt.plot(view.LEFT_MARGIN,r)
     prints(view.BLANK_LINE76)
     txt.plot(view.LEFT_MARGIN,r)
-    prints(addr.text)
+    str tmp = " " * 76 ; main.MaxLength 
+    strings.copy(addr.text, tmp)
+    strings.rstrip(tmp) ; <- to get rid of straw CR or LF, but is this necessary?
+    prints(tmp)
+    return strings.length(tmp) ; <- still we can get length, and this can be helpful
   }
 
   ; save text written to the video RAM and saves it into the document's line buffer
@@ -1283,11 +1323,23 @@ main {
     @(curr_addr.text+80-view.LEFT_MARGIN) = $20
 
     ; prints address 'curr_addr' at row 'r'
-    redraw_line(curr_addr, r)
+    ubyte length = redraw_line(curr_addr, r)
+
+    ; this will keep the site of subsequent 'x' in the right space
+    ; if in the middle of a line; if the end of the line has been
+    ; reached it follows the last character in the line
+    if c >= view.LEFT_MARGIN + length {
+      c = view.LEFT_MARGIN + length - 1
+    }
+
+    ; don't go too far left
+    if c < view.LEFT_MARGIN {
+      c = view.LEFT_MARGIN
+    }
 
     cursor.replace(c,r)
-
     txt.plot(c,r)
+
     main.update_tracker()
   }
 
@@ -1344,11 +1396,11 @@ main {
 ;    printb(x)
 ;    txt.nl()
 ;  }
-;
-;  sub printb (ubyte x) {
-;    txt.print_ub0(x)
-;  }
-;
+
+  sub printb (ubyte x) {
+    txt.print_ub0(x)
+  }
+
 ;  sub printB (ubyte x) {
 ;    txt.print_ub(x)
 ;  }
