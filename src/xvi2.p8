@@ -1,22 +1,12 @@
 ; BUGS (PRIORITY)
-; - o/O + Replace mode is causing weird line redraw
-; --- successive <enter> should create more lines and not leave Replace mode,
-; --- but it's exacerbating VRAM corruption
 
 ; DOING: <- start here!!
-; - see BUGS
-; -- <return> during (R)eplace mode should do equivalent of <esc>o (add blank line below)
-; -- working out issues with maintaining proper state info (cursor position, etc)
-; - (on going) ensure consistent tracking of view.MODE (e.g., mode.NAV, mode.REPLACE, etc)
+; - :e on splash to start new document buffer (PRIORITY)
+; - o/O need an efficient redraw routine for section affected by shift-down
 
 ; TODO:
-; - o/O need an efficient redraw routine for section affected by shift-down
 ; - insert mode  <esc>i (most commonly used writing mode)
 ; - add mode status, e.g., "-- REPLACE --" / "-- INSERT --" when in the correct modes
-; - :e on splash to start new document buffer
-; - <esc>x needs to replicate the behavior that it if the remainder
-; --- of the line is blank, the cursor itself shifts left rather than
-; --- the contents of the line - may require an "end of line" character??
 
 ; STRETCH TODO:
 ; - ALERTs need to be non-blocking (probably need to use interrupts?)
@@ -27,6 +17,15 @@
 ; - stack based "undo" (p/P, o/O, dd)
 
 ; DONE:
+; - <esc>x needs to replicate the behavior that it if the remainder
+; --- of the line is blank, the cursor itself shifts left rather than
+; --- the contents of the line - may require an "end of line" character??
+; ---- solution was to return length of rstrip'd line in redraw_line sub, then make the
+; ---- cursor follow the last printable character in the line
+; - o/O + Replace mode is causing weird line redraw
+; --- successive <enter> should create more lines and not leave Replace mode,
+; --- but it's exacerbating VRAM corruption
+; ---- fix ended up being forcing a clean line to print in the redraw_line sub w/strings.rstrip
 ; - address remaining artifacts and inconsistencies in do_dd's paging and cursor placement ***
 ; - o/O (or equivalent) should leave editor in (R)eplace mode
 ; - :w filetosave.txt
