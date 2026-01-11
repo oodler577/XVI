@@ -865,22 +865,37 @@ main {
     main.update_tracker()
   }
 
-  ; !!! experimental - really need an asmsub like txt.scroll_down, but one that can take
+  ; !!! experimental - pure p8 version of txt.scroll_down_nlast, but takes a column offset 
   ; a starting row
-  sub shift_section_down(ubyte top_row, ubyte bottom_row) {
+  sub scrolldown_nlast(ubyte top_row, ubyte col_start) {
+    ubyte columns, rows, j
+    columns, rows = txt.size()
+    rows--
+    while rows>top_row {
+        rows--
+        uword vera_addr = lsw(txt.VERA_TEXTMATRIX) + 256*rows
+        cx16.vaddr(msw(txt.VERA_TEXTMATRIX), vera_addr+col_start,     0 ,1) ; source row
+        cx16.vaddr(msw(txt.VERA_TEXTMATRIX), vera_addr+col_start+256, 1, 1) ; target row
+        for j in col_start to columns {
+            cx16.VERA_DATA1 = cx16.VERA_DATA0       ; copy tile
+            cx16.VERA_DATA1 = cx16.VERA_DATA0       ; copy color
+        }
+    }
+  }
+
+  sub scrolldown() {
     ubyte columns, rows
     columns, rows = txt.size()
-    ubyte limit = bottom_row - (view.HEIGHT - (view.TOP_LINE+top_row))
     rows--
-    while rows>limit {
-      rows--
-      uword vera_addr = lsw(txt.VERA_TEXTMATRIX) + 256*rows
-      cx16.vaddr(msw(txt.VERA_TEXTMATRIX), vera_addr, 0 ,1)       ; source row
-      cx16.vaddr(msw(txt.VERA_TEXTMATRIX), vera_addr+256, 1, 1)   ; target row
-      repeat columns {
-          cx16.VERA_DATA1 = cx16.VERA_DATA0       ; copy tile
-          cx16.VERA_DATA1 = cx16.VERA_DATA0       ; copy color
-      }
+    while rows>0 {
+        rows--
+        uword vera_addr = lsw(txt.VERA_TEXTMATRIX) + 256*rows
+        cx16.vaddr(msw(txt.VERA_TEXTMATRIX), vera_addr, 0 ,1)       ; source row
+        cx16.vaddr(msw(txt.VERA_TEXTMATRIX), vera_addr+256, 1, 1)   ; target row
+        repeat columns {
+            cx16.VERA_DATA1 = cx16.VERA_DATA0       ; copy tile
+            cx16.VERA_DATA1 = cx16.VERA_DATA0       ; copy color
+        }
     }
   }
 
@@ -919,10 +934,14 @@ main {
       cursor.replace(view.LEFT_MARGIN,r)
     }
     else {
-      ;draw_screen()
-      shift_section_down(r, view.BOTTOM_LINE) 
+      main.scrolldown_nlast(r, view.LEFT_MARGIN) ; 2nd param is column offset to start
       txt.plot(view.LEFT_MARGIN,r)
-      cursor.replace(view.LEFT_MARGIN,r)
+      prints(view.BLANK_LINE76)
+      txt.plot(0,view.BOTTOM_LINE+1)
+      prints(view.BLANK_LINE79)
+      txt.plot(view.LEFT_MARGIN,r)
+      cursor.hide()
+      cursor.place(view.LEFT_MARGIN,r)
     }
 
     main.update_tracker()
@@ -1192,7 +1211,7 @@ main {
     ubyte next_line = curr_line-1;
     if curr_line == view.TOP_LINE {
       cursor.hide()
-      txt.scroll_down()
+      main.scrolldown()
       void decr_top_line(1)
       txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
       draw_top_line(view.CURR_TOP_LINE)
