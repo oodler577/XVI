@@ -6,6 +6,7 @@
 ; - :e on splash to start new document buffer (PRIORITY)
 
 ; TODO:
+; - fast "save_line_buffer"
 ; - insert mode  <esc>i (most commonly used writing mode)
 ; - add mode status, e.g., "-- REPLACE --" / "-- INSERT --" when in the correct modes
 
@@ -19,30 +20,7 @@
 
 ; DONE:
 ; - o/O need an efficient redraw routine for section affected by shift-down
-; - <esc>x needs to replicate the behavior that it if the remainder
-; --- of the line is blank, the cursor itself shifts left rather than
-; --- the contents of the line - may require an "end of line" character??
-; ---- solution was to return length of rstrip'd line in redraw_line sub, then make the
-; ---- cursor follow the last printable character in the line
-; - o/O + Replace mode is causing weird line redraw
-; --- successive <enter> should create more lines and not leave Replace mode,
-; --- but it's exacerbating VRAM corruption
-; ---- fix ended up being forcing a clean line to print in the redraw_line sub w/strings.rstrip
-; - address remaining artifacts and inconsistencies in do_dd's paging and cursor placement ***
-; - o/O (or equivalent) should leave editor in (R)eplace mode
-; - :w filetosave.txt
-; - w - blocks if file exists,
-; - foo.txt causes memory overflow (end line was doubling the space taken up in memory)
-; - q - block quit if no save since last time?
-; - w! filename.txt (bug exposed, nav on j stops at some point in the screen)
-; - main.lineCount is getting truncated or reset somehow
-; ---- used main.lineCount, there might still be a bug between strings.slice + Document.lineCount
-; - make sure existing file is overwritten on forced save ...
-; - q! - force quit
-; - fixed o, O, p, P - made them consistent with cursor and paging behavior
-; - fixed scrolling bug with dd on last page
-; - replace character mode <esc>r
-; - replace mode <esc>R ... then <esc> to end
+; see CHANGELOG for full archive of items
 
 %zeropage basicsafe
 %option no_sysinit
