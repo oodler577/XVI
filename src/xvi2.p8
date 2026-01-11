@@ -1,8 +1,9 @@
 ; BUGS (PRIORITY)
+; - get crash and monitor prompt at the end of the document in some case;
+; -- need to figure out how to reproduce it
 
 ; DOING: <- start here!!
 ; - :e on splash to start new document buffer (PRIORITY)
-; - o/O need an efficient redraw routine for section affected by shift-down
 
 ; TODO:
 ; - insert mode  <esc>i (most commonly used writing mode)
@@ -17,6 +18,7 @@
 ; - stack based "undo" (p/P, o/O, dd)
 
 ; DONE:
+; - o/O need an efficient redraw routine for section affected by shift-down
 ; - <esc>x needs to replicate the behavior that it if the remainder
 ; --- of the line is blank, the cursor itself shifts left rather than
 ; --- the contents of the line - may require an "end of line" character??
@@ -311,6 +313,22 @@ main {
     sys.memset(next, BufferSize, 0)
   }
 
+  sub init_empty_buffer(ubyte lines) {
+    freeAll()
+    txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
+    doc.unsaved = false
+    main.lineCount = 0
+
+    ubyte idx   = 0
+    str lineBuffer  = " " * (MaxLength + 1)
+    repeat lines {
+      uword lineAddr = allocLine(lineBuffer)
+      idx = main.lineCount as ubyte
+      view.INDEX[idx] = lineAddr
+      main.lineCount++
+    }
+  }
+
   sub load_file(str filepath) {
     strings.strip(filepath)
     freeAll()
@@ -415,7 +433,7 @@ main {
     void diskio.f_open_w_seek(filepath)
     ^^Line line = view.INDEX[0]
     do {
-      for i in 0 to 79 {
+      for i in 0 to main.MaxLength-1 {
         ub = @(line.text+i)     ; line.text is an address, we iterate over each byte
         if ub >= 32 and ub <= 126 {
           void diskio.f_write(&ub, 1)
@@ -445,7 +463,8 @@ main {
     splash()
 
     ;sys.wait(40)
-    load_file("sample6.txt")
+    ;load_file("sample6.txt")
+
     draw_initial_screen()
     cursor.place(view.LEFT_MARGIN, view.TOP_LINE)
 
@@ -455,6 +474,7 @@ main {
     ubyte char = 0
     ubyte col
     ubyte row
+
     NAVCHARLOOP:
       void, char = cbm.GETIN()
       col = view.c()
@@ -472,9 +492,8 @@ main {
           main.MODE = mode.NAV
         }
         $3a -> {       ; ':',  mode
-   ;debug.assert(main.lineCount, 93, debug.EQ, "Checkpoint 1 ... main.lineCount == 93")
           if main.MODE == mode.NAV {
-            ;main.MODE = mode.COMMAND
+            main.MODE = mode.COMMAND
 
             cursor.command_prompt() ; populates cursor.cmdBuffer
 
@@ -505,21 +524,21 @@ main {
             ubyte cmd_length = strings.copy(cursor.cmdBuffer, cmd)
             str fn1 = " " * 60
 
-            ;debug.assert(main.lineCount, 93, debug.EQ, "Checkpoint 1 ... main.lineCount == 93")
-            ;warnW(main.lineCount)
             strings.slice(cmd, cmd_offset, cmd_length-cmd_offset, fn1) ; <- somehow this is affecting main.lineCount ...
-            ;warnW(main.lineCount)
 
-            ;debug.assert(main.lineCount, 93, debug.EQ, "Checkpoint 2 ... main.lineCount == 93")
             strings.strip(fn1) ; prep filename
 
             when cursor.cmdBuffer[0] {
               'e' -> {
-                ; 'e' is for "edit" - fn1 is the filename
-                load_file(fn1)
-                draw_initial_screen()
-                col = view.LEFT_MARGIN
-                row = view.TOP_LINE
+                if strings.length(fn1) > 0 {
+                  load_file(fn1)
+                  draw_initial_screen()
+                  col = view.LEFT_MARGIN
+                 row = view.TOP_LINE
+                }
+                else {
+                  init_empty_buffer(1)
+                }
               }
               'q' -> {
                 if doc.unsaved == true and not force {
@@ -651,22 +670,23 @@ main {
               goto RLOOP2
             }
             when char {
-              $1b -> {       ; <esc> key, throw into NAV mode from any other mode
+              $1b -> {       ; <esc> throw into NAV mode from any other mode
                 main.MODE = mode.NAV
                 main.save_line_buffer()
                 goto NAVCHARLOOP
               }
-              $0d -> {       ; <enter> key, adds line below (like <esc>o), stays in replace mode
+              $1c -> {       ; <return> replicate <esc>, would like to also followed by an immediate 'o' 
                 main.MODE = mode.NAV
                 main.save_line_buffer()
-                main.insert_line_below()
+; TODO - add logic to insert line below and keep typing
+                goto NAVCHARLOOP
               }
               else -> { ; backspace
-                goto INSERTMODE
+                goto REPLACEMODE
               }
             }
             goto RLOOP2
-            INSERTMODE:
+            REPLACEMODE:
             if view.c() < view.LEFT_MARGIN {       ; this is where to handle backspace past left margine
               cursor.hide()
               txt.plot(view.LEFT_MARGIN, view.r())
@@ -771,7 +791,6 @@ main {
       return
     }
 
-    ubyte c = view.c()
     ubyte r = view.r()
 
     uword curr_line = main.get_line_num(r) ; next_line is +1
@@ -822,7 +841,6 @@ main {
       return
     }
 
-    ubyte c = view.c()
     ubyte r = view.r()
 
     uword curr_line = main.get_line_num(r) ; next_line is +1
@@ -851,7 +869,7 @@ main {
       cursor.replace(view.LEFT_MARGIN,r+1)
     }
     else if r == view.BOTTOM_LINE {
-      incr_top_line(1)
+      void incr_top_line(1)
       draw_screen()
       txt.plot(view.LEFT_MARGIN,r)
       cursor.replace(view.LEFT_MARGIN,r)
@@ -914,7 +932,6 @@ main {
   }
 
   sub insert_line_below() {
-    ubyte c = view.c()
     ubyte r = view.r()
 
     cursor.hide()
@@ -944,13 +961,13 @@ main {
       cursor.replace(view.LEFT_MARGIN,r+1)
     }
     else if r == view.BOTTOM_LINE {
-      incr_top_line(1)
+      void incr_top_line(1)
       draw_screen()
       txt.plot(view.LEFT_MARGIN,r)
       cursor.replace(view.LEFT_MARGIN,r)
     }
     else {
-      txt.scrolldown_nlast(view.HEIGHT-(view.TOP_LINE+r+1), view.LEFT_MARGIN)
+      txt.scrolldown_nlast(r+1, view.LEFT_MARGIN)
       txt.plot(view.LEFT_MARGIN,r+1)
       prints(view.BLANK_LINE76)
       txt.plot(0,view.BOTTOM_LINE+1)
@@ -1042,7 +1059,7 @@ main {
         printLineNum(lineNum)
         txt.plot(view.LEFT_MARGIN,r)
         ^^Line line = addr
-        say(line.text)
+        prints(line.text)
         addr = line.next
         r++
         lineNum++
@@ -1065,6 +1082,7 @@ main {
         n = (view.HEIGHT - remaining) as ubyte
       }
       uword lineNum = view.CURR_TOP_LINE
+      str tmp = " " *main.MaxLength
       repeat m {
         r = view.r()
         txt.plot(0, r)
@@ -1072,7 +1090,12 @@ main {
         txt.plot(0, r)
         printLineNum(lineNum)
         txt.plot(view.LEFT_MARGIN, r)
-        say(line.text)
+
+        void strings.copy(line.text,tmp) ; also figure out why I have to do this to get rid of errant space in next line
+        strings.rstrip(tmp)
+        prints(tmp)
+        txt.plot(view.LEFT_MARGIN, r+1)
+
 
         ; get next Line
         line = line.next
@@ -1082,7 +1105,8 @@ main {
         r = view.r()
         prints(view.BLANK_LINE79)
         txt.plot(0,r)
-        say("~")
+        prints("~")
+        txt.plot(0,r+1)
       }
   }
 
@@ -1144,24 +1168,23 @@ main {
   }
 
   sub jump_to_begin() {
-      ubyte c = view.c()
       if main.lineCount > view.HEIGHT {
         view.CURR_TOP_LINE = 1
         draw_screen()
       }
-      cursor.replace(c, view.TOP_LINE)
+      txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
+      cursor.replace(view.c(), view.r())
       main.update_tracker()
   }
 
   sub jump_to_end() {
-      ubyte c = view.c()
       if main.lineCount > view.HEIGHT {
         view.CURR_TOP_LINE = main.lineCount - view.HEIGHT + 1
         draw_screen()
-        cursor.replace(c, view.BOTTOM_LINE)
+        cursor.replace(view.LEFT_MARGIN, view.BOTTOM_LINE)
       }
       else {
-        cursor.place(c, (main.lineCount as ubyte) + 1)
+        cursor.place(view.LEFT_MARGIN, (main.lineCount as ubyte) + 1)
       }
       main.update_tracker()
   }
@@ -1245,7 +1268,7 @@ main {
     prints(view.BLANK_LINE76)
     txt.plot(view.LEFT_MARGIN,r)
     str tmp = " " * 76 ; main.MaxLength 
-    strings.copy(addr.text, tmp)
+    void strings.copy(addr.text, tmp)
     strings.rstrip(tmp) ; <- to get rid of straw CR or LF, but is this necessary?
     prints(tmp)
     return strings.length(tmp) ; <- still we can get length, and this can be helpful
@@ -1256,16 +1279,14 @@ main {
     ubyte c = view.c()
     ubyte r = view.r()
 
-    uword curr_line = main.get_line_num(r) ; next_line is +1
-
     ^^Line curr_addr = get_Line_addr(r)    ; gets memory addr of current Line
-    uword i
-    for i in 0 to 78-view.LEFT_MARGIN {
-      @(curr_addr.text+i) = txt.getchr(view.LEFT_MARGIN+(i as ubyte),r)
+
+    ubyte i
+    for i in view.LEFT_MARGIN to view.RIGHT_MARGIN {
+      @(curr_addr.text+(i-view.LEFT_MARGIN-1)) = txt.getchr(i-1,r)
     }
 
-    ; prints address 'curr_addr' at row 'r'
-    redraw_line(curr_addr, r)
+    info("line saved to buffer ...")
 
     cursor.replace(c,r)
     txt.plot(c,r)
@@ -1277,8 +1298,6 @@ main {
     ubyte c = view.c()
     ubyte r = view.r()
 
-    uword curr_line = main.get_line_num(r) ; next_line is +1
-
     ^^Line curr_addr = get_Line_addr(r)    ; gets memory addr of current Line
 
     ; remove char at (c,r) then shift everything to the left
@@ -1287,7 +1306,7 @@ main {
     cursor.saved_char = char
 
     ; prints address 'curr_addr' at row 'r'
-    redraw_line(curr_addr, r)
+    void redraw_line(curr_addr, r)
 
     cursor.replace(c,r)
 
@@ -1298,8 +1317,6 @@ main {
   sub delete_xy_shift_left() {
     ubyte c = view.c()
     ubyte r = view.r()
-
-    uword curr_line = main.get_line_num(r) ; next_line is +1
 
     ^^Line curr_addr = get_Line_addr(r)    ; gets memory addr of current Line
 
@@ -1389,9 +1406,9 @@ main {
 ;    txt.nl()
 ;  }
 
-  sub printb (ubyte x) {
-    txt.print_ub0(x)
-  }
+;  sub printb (ubyte x) {
+;    txt.print_ub0(x)
+;  }
 
 ;  sub printB (ubyte x) {
 ;    txt.print_ub(x)
@@ -1405,14 +1422,14 @@ main {
     txt.print_uw(x)
   }
 
-  sub printH (uword x) {
-    txt.print_uwhex(x, true)
-  }
+;  sub printH (uword x) {
+;    txt.print_uwhex(x, true)
+;  }
 
-  sub sayH (uword x) {
-    main.printH(x)
-    txt.nl()
-  }
+;  sub sayH (uword x) {
+;    main.printH(x)
+;    txt.nl()
+;  }
 
   sub info(str message) {
     alert(message, 15, $7, $6)
@@ -1438,9 +1455,9 @@ main {
     alertW(message, 15, $7, $6)
   }
 
-  sub warnW(uword message) {
-    alertW(message, 120, $2, $1)
-  }
+;  sub warnW(uword message) {
+;    alertW(message, 120, $2, $1)
+;  }
 
   sub alertW(uword message, ubyte delay, ubyte color1, ubyte color2) {
     txt.plot(74, 0)
@@ -1453,24 +1470,24 @@ main {
     prints(view.BLANK_LINE79)
   }
 
-  sub infoH(uword message) {
-    alertH(message, 15, $7, $6)
-  }
-
-  sub warnH(uword message) {
-    alertH(message, 120, $2, $1)
-  }
-
-  sub alertH(uword message, ubyte delay, ubyte color1, ubyte color2) {
-    txt.plot(74, 0)
-    txt.color2(color1, color2)
-    printH(message)
-    sys.wait(delay)
-    txt.plot(74, 0)
-    txt.color2($1, $6) ; sets text back to default, white on blue
-    txt.plot(view.LEFT_MARGIN, 0)
-    prints(view.BLANK_LINE79)
-  }
+;  sub infoH(uword message) {
+;    alertH(message, 15, $7, $6)
+;  }
+;
+;  sub warnH(uword message) {
+;    alertH(message, 120, $2, $1)
+;  }
+;
+;  sub alertH(uword message, ubyte delay, ubyte color1, ubyte color2) {
+;    txt.plot(74, 0)
+;    txt.color2(color1, color2)
+;    printH(message)
+;    sys.wait(delay)
+;    txt.plot(74, 0)
+;    txt.color2($1, $6) ; sets text back to default, white on blue
+;    txt.plot(view.LEFT_MARGIN, 0)
+;    prints(view.BLANK_LINE79)
+;  }
 }
 
 txt {
