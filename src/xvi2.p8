@@ -865,40 +865,6 @@ main {
     main.update_tracker()
   }
 
-  ; !!! experimental - pure p8 version of txt.scroll_down_nlast, but takes a column offset 
-  ; a starting row
-  sub scrolldown_nlast(ubyte top_row, ubyte col_start) {
-    ubyte columns, rows, j
-    columns, rows = txt.size()
-    rows--
-    while rows>top_row {
-        rows--
-        uword vera_addr = lsw(txt.VERA_TEXTMATRIX) + 256*rows
-        cx16.vaddr(msw(txt.VERA_TEXTMATRIX), vera_addr+col_start,     0 ,1) ; source row
-        cx16.vaddr(msw(txt.VERA_TEXTMATRIX), vera_addr+col_start+256, 1, 1) ; target row
-        for j in col_start to columns {
-            cx16.VERA_DATA1 = cx16.VERA_DATA0       ; copy tile
-            cx16.VERA_DATA1 = cx16.VERA_DATA0       ; copy color
-        }
-    }
-  }
-
-  sub scrolldown() {
-    ubyte columns, rows
-    columns, rows = txt.size()
-    rows--
-    while rows>0 {
-        rows--
-        uword vera_addr = lsw(txt.VERA_TEXTMATRIX) + 256*rows
-        cx16.vaddr(msw(txt.VERA_TEXTMATRIX), vera_addr, 0 ,1)       ; source row
-        cx16.vaddr(msw(txt.VERA_TEXTMATRIX), vera_addr+256, 1, 1)   ; target row
-        repeat columns {
-            cx16.VERA_DATA1 = cx16.VERA_DATA0       ; copy tile
-            cx16.VERA_DATA1 = cx16.VERA_DATA0       ; copy color
-        }
-    }
-  }
-
   sub insert_line_above() {
     ubyte r = view.r()
 
@@ -934,7 +900,7 @@ main {
       cursor.replace(view.LEFT_MARGIN,r)
     }
     else {
-      main.scrolldown_nlast(r, view.LEFT_MARGIN) ; 2nd param is column offset to start
+      txt.scrolldown_nlast(r, view.LEFT_MARGIN) ; 2nd param is column offset to start
       txt.plot(view.LEFT_MARGIN,r)
       prints(view.BLANK_LINE76)
       txt.plot(0,view.BOTTOM_LINE+1)
@@ -984,8 +950,7 @@ main {
       cursor.replace(view.LEFT_MARGIN,r)
     }
     else {
-      ;shift_section_down(r+1, view.BOTTOM_LINE) 
-      txt.scroll_down_nlast(view.HEIGHT-(view.TOP_LINE+r+1))
+      txt.scrolldown_nlast(view.HEIGHT-(view.TOP_LINE+r+1), view.LEFT_MARGIN)
       txt.plot(view.LEFT_MARGIN,r+1)
       prints(view.BLANK_LINE76)
       txt.plot(0,view.BOTTOM_LINE+1)
@@ -1211,7 +1176,7 @@ main {
     ubyte next_line = curr_line-1;
     if curr_line == view.TOP_LINE {
       cursor.hide()
-      main.scrolldown()
+      txt.scrolldown()
       void decr_top_line(1)
       txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
       draw_top_line(view.CURR_TOP_LINE)
@@ -1510,59 +1475,37 @@ main {
 
 txt {
 %option merge
+  ; !!! experimental - pure p8 version of txt.scroll_down_nlast, but takes a column offset 
 
-asmsub  scroll_down_nlast(ubyte lines @A) clobbers(A, X, Y)  {
-	; ---- scroll the whole screen 1 character down
-	;      contents of the top row are unchanged, you should refill/clear this yourself
-	%asm {{
-            sta P8ZP_SCRATCH_B1
-            dec P8ZP_SCRATCH_B1
-	    jsr  cbm.SCREEN
-	    stx  P8ZP_SCRATCH_REG       ; columns
-	    dey
-        stz  cx16.VERA_CTRL         ; data port 0 is source
-        dey
-        tya
-        clc
-        adc  #>VERA_TEXTMATRIX
-        sta  cx16.VERA_ADDR_M       ; start at line before bottom line
-        stz  cx16.VERA_ADDR_L
-        lda  #%00010000 | VERA_TEXTMATRIX>>16
-        sta  cx16.VERA_ADDR_H       ; enable auto increment by 1, bank 0.
+  sub scrolldown_nlast(ubyte top_row, ubyte col_start) {
+    ubyte columns, rows, j
+    columns, rows = txt.size()
+    rows--
+    while rows>top_row {
+        rows--
+        uword vera_addr = lsw(txt.VERA_TEXTMATRIX) + 256*rows
+        cx16.vaddr(msw(txt.VERA_TEXTMATRIX), vera_addr+col_start,     0 ,1) ; source row
+        cx16.vaddr(msw(txt.VERA_TEXTMATRIX), vera_addr+col_start+256, 1, 1) ; target row
+        for j in col_start to columns {
+            cx16.VERA_DATA1 = cx16.VERA_DATA0       ; copy tile
+            cx16.VERA_DATA1 = cx16.VERA_DATA0       ; copy color
+        }
+    }
+  }
 
-        lda  #1
-        sta  cx16.VERA_CTRL         ; data port 1 is destination
-        iny
-        tya
-        clc
-        adc  #>VERA_TEXTMATRIX
-        sta  cx16.VERA_ADDR_M       ; start at bottom line
-        stz  cx16.VERA_ADDR_L
-        lda  #%00010000 | VERA_TEXTMATRIX>>16
-        sta  cx16.VERA_ADDR_H       ; enable auto increment by 1, bank 0.
-
-_nextline
-        ldx  P8ZP_SCRATCH_REG       ; columns
--       lda  cx16.VERA_DATA0
-        sta  cx16.VERA_DATA1        ; copy char
-        lda  cx16.VERA_DATA0
-        sta  cx16.VERA_DATA1        ; copy color
-        dex
-        bne  -
-        dec  P8ZP_SCRATCH_B1
-        beq  +
-        stz  cx16.VERA_CTRL         ; data port 0
-        stz  cx16.VERA_ADDR_L
-        dec  cx16.VERA_ADDR_M
-        lda  #1
-        sta  cx16.VERA_CTRL         ; data port 1
-        stz  cx16.VERA_ADDR_L
-        dec  cx16.VERA_ADDR_M
-        bra  _nextline
-
-+       lda  #0
-        sta  cx16.VERA_CTRL
-	    rts
-	}}
-}
+  sub scrolldown() {
+    ubyte columns, rows
+    columns, rows = txt.size()
+    rows--
+    while rows>0 {
+        rows--
+        uword vera_addr = lsw(txt.VERA_TEXTMATRIX) + 256*rows
+        cx16.vaddr(msw(txt.VERA_TEXTMATRIX), vera_addr, 0 ,1)       ; source row
+        cx16.vaddr(msw(txt.VERA_TEXTMATRIX), vera_addr+256, 1, 1)   ; target row
+        repeat columns {
+            cx16.VERA_DATA1 = cx16.VERA_DATA0       ; copy tile
+            cx16.VERA_DATA1 = cx16.VERA_DATA0       ; copy color
+        }
+    }
+  }
 }
