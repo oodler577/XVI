@@ -1,16 +1,21 @@
 ; BUGS (PRIORITY)
 ; - get crash and monitor prompt at the end of the document in some case;
 ; -- need to figure out how to reproduce it
+;
 
 ; DOING: <- start here!!
-; - :e on splash to start new document buffer (PRIORITY)
+; - implement flag-based "do stuff" idea for alerts (from Tony)
+; - (BUG) when in 'R' mode, entering in double quotes (") breaks replace mode
+; - use 'R' mode over and over again - record and triage bugs
 
 ; TODO:
-; - fast "save_line_buffer"
+; - add fast "scroll_down" on in 'R' and hit 'enter'
 ; - insert mode  <esc>i (most commonly used writing mode)
 ; - add mode status, e.g., "-- REPLACE --" / "-- INSERT --" when in the correct modes
+; - fast "save_line_buffer"
 
 ; STRETCH TODO:
+; - "shift left" for 'x'
 ; - ALERTs need to be non-blocking (probably need to use interrupts?)
 ; - :set number / :set nonumber (turns line numbers on/off)
 ; - wq! - force save, force save and quit
@@ -21,6 +26,12 @@
 ; DONE:
 ; - o/O need an efficient redraw routine for section affected by shift-down
 ; see CHANGELOG for full archive of items
+; - trying to get <return> when in REPLACE mode working, see BUGS
+;   - can't get <return> to do the right thing when in REPLACE mode; i.e.,
+;   -- I want it to save the current line, do the equivalent of 'o' (insert
+;   -- line after), and return back to edit mode (replace or insert, whatever
+;   -- it was)
+; - :e on splash to start new document buffer (PRIORITY)
 
 %zeropage basicsafe
 %option no_sysinit
@@ -305,6 +316,8 @@ main {
       view.INDEX[idx] = lineAddr
       main.lineCount++
     }
+
+    main.draw_screen()
   }
 
   sub load_file(str filepath) {
@@ -440,7 +453,7 @@ main {
     txt.plot(0,1)
     splash()
 
-    ;sys.wait(40)
+    sys.wait(20)
     ;load_file("sample6.txt")
 
     draw_initial_screen()
@@ -458,6 +471,7 @@ main {
       col = view.c()
       row = view.r()
 
+    SKIP_NAVCHARLOOP:
       when char {
         $0c -> {  ; this is a "form feed", and I have no idea why I put this here
           view.CURR_TOP_LINE = 1
@@ -512,7 +526,7 @@ main {
                   load_file(fn1)
                   draw_initial_screen()
                   col = view.LEFT_MARGIN
-                 row = view.TOP_LINE
+                  row = view.TOP_LINE
                 }
                 else {
                   init_empty_buffer(1)
@@ -653,11 +667,14 @@ main {
                 main.save_line_buffer()
                 goto NAVCHARLOOP
               }
-              $1c -> {       ; <return> replicate <esc>, would like to also followed by an immediate 'o' 
+              $0d -> {       ; <return> replicate <esc>, would like to also followed by an immediate 'o' 
+                ; this part is the same as <esc>
                 main.MODE = mode.NAV
                 main.save_line_buffer()
-; TODO - add logic to insert line below and keep typing
-                goto NAVCHARLOOP
+                ; this part simulates the pressing of 'o'
+                char = $6f ; 'o' 
+                ; this jumpts to right after NAVACHARLOOP: and reads char as if 'o' was pressed
+                goto SKIP_NAVCHARLOOP
               }
               else -> { ; backspace
                 goto REPLACEMODE
@@ -954,6 +971,8 @@ main {
       cursor.place(view.LEFT_MARGIN,r+1)
     }
 
+    main.printLineNum(curr_line+1)
+
     main.update_tracker()
   }
 
@@ -1017,9 +1036,14 @@ main {
   }
 
   sub printLineNum (uword number) {
+    ubyte c = view.c()
+    txt.plot(0, view.r())
     txt.color($f)
+    prints("    ")
+    txt.plot(0, view.r())
     printW(number)
     txt.color($1)
+    txt.plot(c, view.r())
   }
 
   sub draw_initial_screen () {
@@ -1034,7 +1058,7 @@ main {
       uword lineNum = 1
       repeat i {
         txt.plot(0, r)
-        printLineNum(lineNum)
+        main.printLineNum(lineNum)
         txt.plot(view.LEFT_MARGIN,r)
         ^^Line line = addr
         prints(line.text)
@@ -1066,7 +1090,7 @@ main {
         txt.plot(0, r)
         prints(view.BLANK_LINE79)
         txt.plot(0, r)
-        printLineNum(lineNum)
+        main.printLineNum(lineNum)
         txt.plot(view.LEFT_MARGIN, r)
 
         void strings.copy(line.text,tmp) ; also figure out why I have to do this to get rid of errant space in next line
@@ -1099,7 +1123,7 @@ main {
       txt.plot(0, view.BOTTOM_LINE)
       prints(view.BLANK_LINE79)
       txt.plot(0, view.BOTTOM_LINE)
-      printLineNum(lineNum)
+      main.printLineNum(lineNum)
       txt.plot(view.LEFT_MARGIN, view.BOTTOM_LINE)
       say(line.text)
   }
@@ -1115,7 +1139,7 @@ main {
       txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
       prints(line.text)
       txt.plot(0, view.TOP_LINE)
-      printLineNum(lineNum)
+      main.printLineNum(lineNum)
   }
 
   sub page_forward() {
