@@ -5,11 +5,12 @@
 
 ; DOING: <- start here!!
 ; - implement flag-based "do stuff" idea for alerts (from Tony)
-; - (BUG) when in 'R' mode, entering in double quotes (") breaks replace mode
-; - use 'R' mode over and over again - record and triage bugs
+; - add fast "scroll_down" on in 'R' and hit 'enter' (currently way to slow
+; -- when it hits draw_screen() on new buffer)
 
 ; TODO:
-; - add fast "scroll_down" on in 'R' and hit 'enter'
+; - (BUG) when in 'R' mode, entering in double quotes (") breaks replace mode
+; - use 'R' mode over and over again - record and triage bugs
 ; - insert mode  <esc>i (most commonly used writing mode)
 ; - add mode status, e.g., "-- REPLACE --" / "-- INSERT --" when in the correct modes
 ; - fast "save_line_buffer"
