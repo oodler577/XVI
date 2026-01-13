@@ -1,22 +1,20 @@
 ; BUGS (PRIORITY)
 ; - get crash and monitor prompt at the end of the document in some case;
 ; -- need to figure out how to reproduce it
-;
+; - ^,$  (jump to line start, line end) both do not properly replace the letter under the cursor
 
 ; DOING: <- start here!!
 ; - add fast "scroll_down" on in 'R' and hit 'enter' (currently way to slow
 ; -- when it hits draw_screen() on new buffer)
+; - insert mode  <esc>i (most commonly used writing mode)
+; -- build on current functionality of 'i' which is to shift right and insert space
 
 ; TODO:
 ; - (BUG) when in 'R' mode, entering in double quotes (") breaks replace mode
 ; - use 'R' mode over and over again - record and triage bugs
-; - insert mode  <esc>i (most commonly used writing mode)
-; - add mode status, e.g., "-- REPLACE --" / "-- INSERT --" when in the correct modes
 ; - fast "save_line_buffer"
 
 ; STRETCH TODO:
-; - "shift left" for 'x'
-; - ALERTs need to be non-blocking (probably need to use interrupts?)
 ; - :set number / :set nonumber (turns line numbers on/off)
 ; - wq! - force save, force save and quit
 ; - allow many more lines (convert Line to use str instead permanent line)
@@ -27,6 +25,10 @@
 ; - implement flag-based "do stuff" idea for alerts (from Tony)
 
 ; DONE:
+; - 'i' now inserts a space and shifts right
+; - add mode status, e.g., "-- REPLACE --" / "-- INSERT --" when in the correct modes
+; - ALERTs need to be non-blocking (probably need to use interrupts?)
+; - "shift left" for 'x'
 ; - o/O need an efficient redraw routine for section affected by shift-down
 ; see CHANGELOG for full archive of items
 ; - trying to get <return> when in REPLACE mode working, see BUGS
@@ -56,10 +58,11 @@ mode {
   const ubyte COMMAND         = 4  ; modal state for entering a command
 }
 
-flag {
+flags {
   ; display flags
   ubyte       MESSAGE         = 0  ; could be an array, I suppose and cycle messages I suppose ...
   bool        UNSAVED         = false
+  bool        SAVE_AS_PETSCII = false
 }
 
 view {
@@ -318,7 +321,7 @@ main {
   sub init_empty_buffer(ubyte lines) {
     freeAll()
     txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
-    flag.UNSAVED = false
+    flags.UNSAVED = false
     main.lineCount = 0
 
     ubyte idx   = 0
@@ -329,7 +332,7 @@ main {
       view.INDEX[idx] = lineAddr
       main.lineCount++
     }
-    flag.UNSAVED = true
+    flags.UNSAVED = true
     main.draw_screen()
     txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
     cursor.place(view.c(), view.r())
@@ -344,7 +347,7 @@ main {
     say(doc.filepath)
     sys.wait(20)
     txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
-    flag.UNSAVED = false
+    flags.UNSAVED = false
     main.lineCount = 0
 
     ubyte tries = 0
@@ -449,7 +452,7 @@ main {
     } until line == 0
     diskio.f_close_w()
 
-    flag.UNSAVED = false
+    flags.UNSAVED = false
 
     info_noblock("          ")
   }
@@ -502,7 +505,7 @@ main {
       if char == $00 {
         goto NAVCHARLOOP
       }
-      else if char != ':' and main.MODE == mode.INIT {
+      else if char != ':' and char != $1b and main.MODE == mode.INIT {
         main.MODE = mode.NAV
         cursor.cmdBuffer[0] = 'e'
         goto SKIP_COMMANDPROMPT   ; simulate ":e" from initial screen
@@ -572,12 +575,8 @@ main {
                 }
               }
               'q' -> {
-                if flag.UNSAVED == true and not force {
+                if flags.UNSAVED == true and not force {
                     warn("Unsaved changes exist. Use q! to override ...")
-                }
-                else {
-                  txt.iso_off()
-                  sys.exit(0)
                 }
               }
               'w' -> {
@@ -694,13 +693,22 @@ main {
         }
         'i' -> {
           if main.MODE == mode.NAV {
-            warn("(i)nsert mode is not implemented. Use (R)eplace mode instead.")
+            main.MODE = mode.INSERT
+            main.update_tracker()
+            main.insert_space_xy_shift_right() ; initially just adds space, then drop to 'R'
+            main.MODE = mode.NAV
+            main.update_tracker()
           }
+        }
+        'I' -> {
+          flags.SAVE_AS_PETSCII = true;
+          info("Save as PETSCII enabled")
         }
         'R' -> { ; edit mode (initially copy of replace writing mode)
           if main.MODE == mode.NAV {
             RLOOP2:
             main.MODE = mode.REPLACE
+            main.update_tracker()
             void, char = cbm.GETIN()
             if char == $00 {
               goto RLOOP2
@@ -738,7 +746,13 @@ main {
               cursor.place(view.c(),view.r())
               goto RLOOP2
             }
-            cbm.CHROUT(char)
+; TODO - turn off or circumvent quote mode ...
+            if char == $22 {
+              txt.chrout_lit($22)
+            }
+            else {
+              cbm.CHROUT(char)
+            }
             cursor.place(view.c(),view.r())
             main.update_tracker()
             goto RLOOP2
@@ -748,12 +762,12 @@ main {
         ; N A V I G A T I O N
         '^' -> { ; jump to start of line
            txt.plot(view.LEFT_MARGIN, view.r())
-           cursor.replace(view.LEFT_MARGIN,view.r())
+           cursor.place(view.c(),view.r())
            main.update_tracker()
         }
         '$' -> { ; jump top end of line
            txt.plot(view.RIGHT_MARGIN, view.r())
-           cursor.replace(view.RIGHT_MARGIN,view.r())
+           cursor.place(view.c(),view.r())
            main.update_tracker()
         }
         'g' -> {
@@ -791,7 +805,7 @@ main {
             cursor_left_on_h()
           }
         }
-        'l',$1d -> {       ; RIGHT
+        'l',$20,$1d -> {   ; RIGHT
           if main.MODE == mode.NAV {
             cursor_right_on_l()
           }
@@ -851,7 +865,7 @@ main {
     void debug.assert(view.INDEX[curr_line as ubyte], curr_addr, debug.EQ, "INDEX[curr_line as ubyte] == curr_addr")
 
     info("P ...")
-    flag.UNSAVED = true
+    flags.UNSAVED = true
 
     if r == view.TOP_LINE {
       draw_screen()
@@ -899,7 +913,7 @@ main {
     void debug.assert(view.INDEX[curr_line as ubyte], new_next, debug.EQ, "INDEX[curr_line as ubyte] == new_next")
 
     info("p ...")
-    flag.UNSAVED = true
+    flags.UNSAVED = true
 
     if r == view.TOP_LINE {
       draw_screen()
@@ -943,7 +957,7 @@ main {
     void debug.assert(view.INDEX[curr_line as ubyte], curr_addr, debug.EQ, "INDEX[curr_line as ubyte] == curr_addr")
 
     info("O ...")
-    flag.UNSAVED = true
+    flags.UNSAVED = true
 
     if r == view.TOP_LINE {
       draw_screen()
@@ -991,7 +1005,7 @@ main {
     void debug.assert(view.INDEX[curr_line as ubyte], new_next, debug.EQ, "INDEX[curr_line as ubyte] == new_next")
 
     info("o ...")
-    flag.UNSAVED = true
+    flags.UNSAVED = true
 
     if r == view.BOTTOM_LINE {
       void incr_top_line(1)
@@ -1053,7 +1067,7 @@ main {
 
     view.CLIPBOARD   = curr_addr ; save deleted address to clipboard for later pasting
 
-    flag.UNSAVED = true
+    flags.UNSAVED = true
 
     info_noblock("      ")
 
@@ -1361,6 +1375,28 @@ main {
     main.update_tracker()
   }
 
+  sub insert_space_xy_shift_right() {
+    ubyte c = view.c()
+    ubyte r = view.r()
+
+    ^^Line curr_addr = get_Line_addr(r)    ; gets memory addr of current Line
+
+    ubyte i
+    for i in view.RIGHT_MARGIN-1 to c+1 step -1 {
+      @(curr_addr.text+i-view.LEFT_MARGIN) = @(curr_addr.text+i-view.LEFT_MARGIN-1)
+    }
+    @(curr_addr.text+c-view.LEFT_MARGIN) = $20 
+    cursor.saved_char = $20
+
+    ; prints address 'curr_addr' at row 'r'
+    void redraw_line(curr_addr, r)
+
+    cursor.replace(c,r)
+
+    txt.plot(c,r)
+    main.update_tracker()
+  }
+
   sub delete_xy_shift_left() {
     ubyte c = view.c()
     ubyte r = view.r()
@@ -1393,8 +1429,8 @@ main {
       c = view.LEFT_MARGIN
     }
 
-    cursor.replace(c,r)
     txt.plot(c,r)
+    cursor.replace(c,r)
 
     main.update_tracker()
   }
@@ -1433,7 +1469,7 @@ main {
     prints(" CNT: ")
     printw(main.NAVCHARCOUNT)
     txt.plot(79-9, view.r())
-    if flag.UNSAVED == true {
+    if flags.UNSAVED == true {
       txt.color2($6,$1)
       prints("(UNSAVED)")
       txt.color2($1,$6)
@@ -1583,6 +1619,7 @@ main {
 ;    txt.plot(view.LEFT_MARGIN, 0)
 ;    prints(view.BLANK_LINE79)
 ;  }
+
 }
 
 txt {
