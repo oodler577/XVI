@@ -1,4 +1,5 @@
 ; DOING: <- start here!!
+; - making initial start up option/buffer presentation as close to vim as possible
 ; - (PRIORITY) insert mode  <esc>i (most commonly used writing mode)
 ; -- build on current functionality of 'i' which is to shift right and insert space
 ; -- also add 'a', which is going to append to the right of the current x,y
@@ -66,9 +67,7 @@ mode {
 
 flags {
   ; display flags
-  ubyte       MESSAGE         = 0  ; could be an array, I suppose and cycle messages I suppose ...
   bool        UNSAVED         = false
-  bool        SAVE_AS_PETSCII = false
 }
 
 view {
@@ -407,17 +406,19 @@ main {
     }
     say("~                             XVI - Commander X16 Vi               ")
     say("~                                                                  ")
-    say("~                                 version 2.0.0                    ")
+    say("~                             version 2.0 pre-ALPHA                ")
+    say("~                                                                  ")
     say("~                             by Brett Estrade et al.              ")
+    say("~                                                                  ")
     say("~                    XVI is open source and freely distributable   ")
     say("~                                                                  ")
     say("~                             Sponsor Prog8 development!           ")
     say("~                                  http://p8ug.org                 ")
     say("~                                                                  ")
+    say("                   type  R to open new buffer in Replace mode      ")
+    say("                   type  i to open new buffer in Insert  mode      ")
     say("~                  type  :e filepath<Enter>    to load file to edit")
     say("~                  type  :q<Enter>             to exit             ")
-    say("~                  type  :help<Enter> or <F1>  for on-line help    ")
-    say("~                  type  :help version2<Enter> for version info    ")
     repeat 24 {
       txt.plot(0, txt.get_row())
       say("~")
@@ -446,7 +447,7 @@ main {
     ^^Line line = view.INDEX[0]
     str tmp = " " * MaxLength
     void strings.copy(line.text, tmp)
-    void strings.rstrip(tmp)
+    strings.rstrip(tmp)
     do {
       for i in 0 to strings.length(tmp)-1 {
         ub = tmp[i]
@@ -514,10 +515,13 @@ main {
       if char == $00 {
         goto NAVCHARLOOP
       }
-      else if char != ':' and char != $1b and main.MODE == mode.INIT {
+      else if main.MODE == mode.INIT and (char == 'R' or char == 'i') {
         main.MODE = mode.NAV
         cursor.cmdBuffer[0] = 'e'
         goto SKIP_COMMANDPROMPT   ; simulate ":e" from initial screen
+      }
+      else if main.MODE == mode.INIT and char != ':' {
+        goto NAVCHARLOOP          ; else, if in INIT, only allow ':' to pass 
       }
 
       when char {
@@ -578,7 +582,7 @@ main {
                   row = view.TOP_LINE
                 }
                 else {
-                  init_empty_buffer(3)
+                  init_empty_buffer(1)
                   char = 'R'
                   goto main.start.SKIP_NAVCHARLOOP
                 }
@@ -1247,7 +1251,7 @@ main {
       ^^Line curr_addr = get_Line_addr(r) ; line being deleted
       str rstripped = " " * main.MaxLength
       void strings.copy(curr_addr.text, rstripped)
-      void strings.rstrip(rstripped)
+      strings.rstrip(rstripped)
       return view.LEFT_MARGIN+strings.length(rstripped)-1
   }
 
@@ -1547,7 +1551,7 @@ main {
       prints("(UNSAVED)")
       txt.color2($1,$6)
     }
-    else {
+    else if main.MODE > mode.INIT {
       prints("( SAVED )")
     }
     ; update mode (upper left)
