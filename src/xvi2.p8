@@ -4,7 +4,6 @@
 ;
 
 ; DOING: <- start here!!
-; - implement flag-based "do stuff" idea for alerts (from Tony)
 ; - add fast "scroll_down" on in 'R' and hit 'enter' (currently way to slow
 ; -- when it hits draw_screen() on new buffer)
 
@@ -23,6 +22,9 @@
 ; - allow many more lines (convert Line to use str instead permanent line)
 ; - do not write contiguous spaces (fully blank linkes, trim when writing)
 ; - stack based "undo" (p/P, o/O, dd)
+
+; PARTIALLY DONE:
+; - implement flag-based "do stuff" idea for alerts (from Tony)
 
 ; DONE:
 ; - o/O need an efficient redraw routine for section affected by shift-down
@@ -44,12 +46,20 @@
 %import syslib
 %import diskio
 %import debug
+;;; %import messages
 
 mode {
+  const ubyte INIT            = 0
   const ubyte NAV             = 1  ; modal state for navigation, default state
   const ubyte INSERT          = 2  ; modal state for insert mode, triggered with ctrl-i
   const ubyte REPLACE         = 3  ; modal state for replacement mode, triggered with ctrl-r
   const ubyte COMMAND         = 4  ; modal state for entering a command
+}
+
+flag {
+  ; display flags
+  ubyte       MESSAGE         = 0  ; could be an array, I suppose and cycle messages I suppose ...
+  bool        UNSAVED         = false
 }
 
 view {
@@ -205,7 +215,8 @@ cursor {
 }
 
 main {
-  ubyte MODE       = mode.NAV ; initial mode is NAV
+  ubyte MODE         = mode.NAV ; initial mode is NAV
+  uword NAVCHARCOUNT = 0        ; the main "clock"
   uword lineCount
 
   struct Document {
@@ -214,7 +225,6 @@ main {
     ubyte startBank ; actual bank number for switching
     uword firstLine ; address of the first line of the document
     uword lineCount ; number of lines
-    bool  unsaved
     ^^ubyte filepath
     ubyte data00, data01, data02, data03, data04, data05, data06, data07
     ubyte data08, data09, data10, data11, data12, data13, data14, data15
@@ -303,10 +313,12 @@ main {
     sys.memset(next, BufferSize, 0)
   }
 
+  ; initiates initial buffer without a file, jumps to REPLACEMODE
+  ; so user can start typing right away
   sub init_empty_buffer(ubyte lines) {
     freeAll()
     txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
-    doc.unsaved = false
+    flag.UNSAVED = false
     main.lineCount = 0
 
     ubyte idx   = 0
@@ -317,8 +329,9 @@ main {
       view.INDEX[idx] = lineAddr
       main.lineCount++
     }
-
     main.draw_screen()
+    txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
+    cursor.place(view.c(), view.r())
   }
 
   sub load_file(str filepath) {
@@ -330,7 +343,7 @@ main {
     say(doc.filepath)
     sys.wait(20)
     txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
-    doc.unsaved = false
+    flag.UNSAVED = false
     main.lineCount = 0
 
     ubyte tries = 0
@@ -415,10 +428,7 @@ main {
 
 ;; mostly working, but some kinks left - for another time!!
   sub save_as(str filepath) {
-    info("saving ...")
-    info(filepath)
-    infoW(main.lineCount)
-    info("lines")
+    info_noblock("saving ...")
 
     ubyte i
     ubyte ub
@@ -438,8 +448,18 @@ main {
     } until line == 0
     diskio.f_close_w()
 
-    info("saved ok ...")
-    doc.unsaved = false
+    flag.UNSAVED = false
+
+    info_noblock("          ")
+  }
+
+  sub navchar_start() {
+    main.NAVCHARCOUNT++
+  }
+
+  sub toggle_nav() {
+    main.MODE = mode.NAV
+    main.update_tracker()
   }
 
   sub start () {
@@ -447,9 +467,11 @@ main {
     doc.tabNum               = 0 ; for future proofing
     doc.charset              = 0 ; for future proofing
     doc.startBank            = 1 ; for future proofing
-    main.lineCount            = 0
     doc.firstLine            = Buffer
     doc.filepath             = " " * 76
+
+    main.lineCount            = 0
+    main.MODE = mode.INIT
 
     txt.plot(0,1)
     splash()
@@ -461,28 +483,39 @@ main {
     cursor.place(view.LEFT_MARGIN, view.TOP_LINE)
 
     main.update_tracker()
-    main.MODE = mode.NAV
 
     ubyte char = 0
     ubyte col
     ubyte row
 
+    ; this is the main loop
     NAVCHARLOOP:
       void, char = cbm.GETIN()
       col = view.c()
       row = view.r()
 
-    SKIP_NAVCHARLOOP:
+    SKIP_NAVCHARLOOP:               ; jump to here to skip input
+
+      navchar_start()               ; event hook
+
+      if char == $00 {
+        goto NAVCHARLOOP
+      }
+      else if char != ':' and main.MODE == mode.INIT {
+        main.MODE = mode.NAV
+        cursor.cmdBuffer[0] = 'e'
+        goto SKIP_COMMANDPROMPT   ; simulate ":e" from initial screen
+      }
+
       when char {
         $0c -> {  ; this is a "form feed", and I have no idea why I put this here
           view.CURR_TOP_LINE = 1
           draw_initial_screen()
           cursor.replace(view.LEFT_MARGIN, view.TOP_LINE)
-          main.update_tracker()
-          main.MODE = mode.NAV
+          toggle_nav()
         }
         $1b -> {       ; ESC key, throw into NAV mode from any other mode
-          main.MODE = mode.NAV
+          toggle_nav()
         }
         $3a -> {       ; ':',  mode
           if main.MODE == mode.NAV {
@@ -504,6 +537,8 @@ main {
             ; :wq
             ; :wq!
             ; :!some-external-looking-command
+
+            SKIP_COMMANDPROMPT:          ; simulate keyboard input by setting cursor.commandBuffer, goto here
 
             ubyte cmd_offset = 1
             bool force = false
@@ -530,11 +565,13 @@ main {
                   row = view.TOP_LINE
                 }
                 else {
-                  init_empty_buffer(1)
+                  init_empty_buffer(3)
+                  char = 'R'
+                  goto main.start.SKIP_NAVCHARLOOP
                 }
               }
               'q' -> {
-                if doc.unsaved == true and not force {
+                if flag.UNSAVED == true and not force {
                     warn("Unsaved changes exist. Use q! to override ...")
                 }
                 else {
@@ -565,7 +602,7 @@ main {
           }
 
           ;debug.assert(main.lineCount, 93, debug.EQ, "ln 515 ... main.lineCount == 93")
-          main.MODE = mode.NAV
+          toggle_nav()
           cursor.replace(col, row)
           main.update_tracker()
         }
@@ -575,7 +612,7 @@ main {
             void, char = cbm.GETIN()
             when char {
               $1b -> {       ; ESC key, throw into NAV mode from any other mode
-                main.MODE = mode.NAV
+                toggle_nav()
                 goto NAVCHARLOOP
               }
               'd' -> {
@@ -604,7 +641,7 @@ main {
             void, char = cbm.GETIN()
             when char {
               $1b -> {       ; ESC key, throw into NAV mode from any other mode
-                main.MODE = mode.NAV
+                toggle_nav()
                 goto NAVCHARLOOP
               }
               'y' -> {
@@ -637,7 +674,7 @@ main {
             }
             when char {
               $1b -> {       ; ESC key, throw into NAV mode from any other mode
-                main.MODE = mode.NAV
+                toggle_nav()
                 goto NAVCHARLOOP
               }
               else -> {
@@ -654,7 +691,12 @@ main {
             main.delete_xy_shift_left()
           }
         }
-        'R','i' -> { ; edit mode (initially copy of replace writing mode)
+        'i' -> {
+          if main.MODE == mode.NAV {
+            warn("(i)nsert mode is not implemented. Use (R)eplace mode instead.")
+          }
+        }
+        'R' -> { ; edit mode (initially copy of replace writing mode)
           if main.MODE == mode.NAV {
             RLOOP2:
             main.MODE = mode.REPLACE
@@ -664,13 +706,13 @@ main {
             }
             when char {
               $1b -> {       ; <esc> throw into NAV mode from any other mode
-                main.MODE = mode.NAV
+                toggle_nav()
                 main.save_line_buffer()
                 goto NAVCHARLOOP
               }
               $0d -> {       ; <return> replicate <esc>, would like to also followed by an immediate 'o' 
                 ; this part is the same as <esc>
-                main.MODE = mode.NAV
+                toggle_nav()
                 main.save_line_buffer()
                 ; this part simulates the pressing of 'o'
                 char = $6f ; 'o' 
@@ -727,7 +769,6 @@ main {
           if main.MODE == mode.NAV {
             ubyte c = view.c()
             ubyte r = view.r()
-            info("redrawing screen ...")
             draw_screen()
             txt.plot(c, r)
             cursor.replace(c, r)
@@ -809,7 +850,7 @@ main {
     void debug.assert(view.INDEX[curr_line as ubyte], curr_addr, debug.EQ, "INDEX[curr_line as ubyte] == curr_addr")
 
     info("P ...")
-    doc.unsaved = true
+    flag.UNSAVED = true
 
     if r == view.TOP_LINE {
       draw_screen()
@@ -857,7 +898,7 @@ main {
     void debug.assert(view.INDEX[curr_line as ubyte], new_next, debug.EQ, "INDEX[curr_line as ubyte] == new_next")
 
     info("p ...")
-    doc.unsaved = true
+    flag.UNSAVED = true
 
     if r == view.TOP_LINE {
       draw_screen()
@@ -901,7 +942,7 @@ main {
     void debug.assert(view.INDEX[curr_line as ubyte], curr_addr, debug.EQ, "INDEX[curr_line as ubyte] == curr_addr")
 
     info("O ...")
-    doc.unsaved = true
+    flag.UNSAVED = true
 
     if r == view.TOP_LINE {
       draw_screen()
@@ -949,14 +990,9 @@ main {
     void debug.assert(view.INDEX[curr_line as ubyte], new_next, debug.EQ, "INDEX[curr_line as ubyte] == new_next")
 
     info("o ...")
-    doc.unsaved = true
+    flag.UNSAVED = true
 
-    if r == view.TOP_LINE {
-      draw_screen()
-      txt.plot(view.LEFT_MARGIN,r+1)
-      cursor.replace(view.LEFT_MARGIN,r+1)
-    }
-    else if r == view.BOTTOM_LINE {
+    if r == view.BOTTOM_LINE {
       void incr_top_line(1)
       draw_screen()
       txt.plot(view.LEFT_MARGIN,r)
@@ -995,7 +1031,7 @@ main {
     ubyte c = view.c()
     ubyte r = view.r()
 
-    info("dd")
+    info_noblock("dd ...")
 
     ^^Line curr_addr = get_Line_addr(r) ; line being deleted
     ^^Line prev_addr = curr_addr.prev   ; line before line being deleted
@@ -1016,7 +1052,9 @@ main {
 
     view.CLIPBOARD   = curr_addr ; save deleted address to clipboard for later pasting
 
-    doc.unsaved = true
+    flag.UNSAVED = true
+
+    info_noblock("      ")
 
     cursor.replace(c, r)
     main.update_tracker()
@@ -1070,6 +1108,7 @@ main {
   }
 
   sub draw_screen () {               ; NOTE: assumes view.CURR_TOP_LINE is correct
+      info_noblock("redrawing ...")
       ubyte idx = (view.CURR_TOP_LINE as ubyte) - 1
       ^^Line line = view.INDEX[idx]
       ubyte r
@@ -1111,6 +1150,8 @@ main {
         prints("~")
         txt.plot(0,r+1)
       }
+
+      info_noblock("             ")
   }
 
   sub draw_bottom_line (uword lineNum) {
@@ -1267,6 +1308,8 @@ main {
 
   ; prints address 'addr' at row 'r'
   sub redraw_line(^^Line addr, ubyte r) -> ubyte {
+    info_noblock("line saved to buffer ...")
+
     txt.plot(view.LEFT_MARGIN,r)
     prints(view.BLANK_LINE76)
     txt.plot(view.LEFT_MARGIN,r)
@@ -1289,7 +1332,7 @@ main {
       @(curr_addr.text+(i-view.LEFT_MARGIN-1)) = txt.getchr(i-1,r)
     }
 
-    info("line saved to buffer ...")
+    info_noblock("                        ")
 
     cursor.replace(c,r)
     txt.plot(c,r)
@@ -1382,15 +1425,33 @@ main {
     printw(X - view.LEFT_MARGIN + 1)
     prints(", y: ")
     printw(Y - view.TOP_LINE    + 1)
-    prints(" - TOP: ")
+    prints(" TOP: ")
     printw(view.CURR_TOP_LINE)
-    prints(" - BOT: ")
+    prints(" BOT: ")
     printw(view.CURR_TOP_LINE+view.HEIGHT-1)
+    prints(" CNT: ")
+    printw(main.NAVCHARCOUNT)
     txt.plot(79-9, view.r())
-    if doc.unsaved == true {
+    if flag.UNSAVED == true {
       txt.color2($6,$1)
       prints("(UNSAVED)")
       txt.color2($1,$6)
+    }
+    else {
+      prints("( SAVED )")
+    }
+    ; update mode (upper left)
+    if main.MODE == mode.REPLACE {
+      info_noblock_LEFT("-- REPLACE --")
+    }
+    else if main.MODE == mode.INSERT {   ; (i)nsert is not implemented yet
+      info_noblock_LEFT("-- INSERT  --")
+    }
+    else if main.MODE == mode.NAV {
+      info_noblock_LEFT("             ")
+    }
+    else {
+      info_noblock_LEFT("             ")
     }
     txt.plot(X,Y)
   }
@@ -1434,6 +1495,30 @@ main {
 ;    txt.nl()
 ;  }
 
+  sub info_noblock_LEFT(str message) {
+    alert_noblock_LEFT(message, $7, $6)
+  }
+
+  sub alert_noblock_LEFT(str message, ubyte color1, ubyte color2) {
+    ubyte length = strings.length(message)
+    txt.plot(1, 0)
+    txt.color2(color1, color2)
+    prints(message)
+    txt.color2($1, $6) ; sets text back to default, white on blue
+  }
+
+  sub info_noblock(str message) {
+    alert_noblock(message, $7, $6)
+  }
+
+  sub alert_noblock(str message, ubyte color1, ubyte color2) {
+    ubyte length = strings.length(message)
+    txt.plot(78-length, 0)
+    txt.color2(color1, color2)
+    prints(message)
+    txt.color2($1, $6) ; sets text back to default, white on blue
+  }
+
   sub info(str message) {
     alert(message, 15, $7, $6)
   }
@@ -1443,6 +1528,8 @@ main {
   }
 
   sub alert(str message, ubyte delay, ubyte color1, ubyte color2) {
+    ubyte c = view.c()
+    ubyte r = view.r()
     ubyte length = strings.length(message)
     txt.plot(78-length, 0)
     txt.color2(color1, color2)
@@ -1452,6 +1539,7 @@ main {
     txt.color2($1, $6) ; sets text back to default, white on blue
     txt.plot(view.LEFT_MARGIN, 0)
     prints(view.BLANK_LINE79)
+    txt.plot(c,r)
   }
 
   sub infoW(uword message) {
@@ -1463,6 +1551,8 @@ main {
 ;  }
 
   sub alertW(uword message, ubyte delay, ubyte color1, ubyte color2) {
+    ubyte c = view.c()
+    ubyte r = view.r()
     txt.plot(74, 0)
     txt.color2(color1, color2)
     printW(message)
@@ -1471,6 +1561,7 @@ main {
     txt.color2($1, $6) ; sets text back to default, white on blue
     txt.plot(view.LEFT_MARGIN, 0)
     prints(view.BLANK_LINE79)
+    txt.plot(c,r)
   }
 
 ;  sub infoH(uword message) {
