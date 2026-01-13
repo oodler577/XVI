@@ -329,6 +329,7 @@ main {
       view.INDEX[idx] = lineAddr
       main.lineCount++
     }
+    flag.UNSAVED = true
     main.draw_screen()
     txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
     cursor.place(view.c(), view.r())
