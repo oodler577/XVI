@@ -521,7 +521,7 @@ main {
         goto SKIP_COMMANDPROMPT   ; simulate ":e" from initial screen
       }
       else if main.MODE == mode.INIT and char != ':' {
-        goto NAVCHARLOOP          ; else, if in INIT, only allow ':' to pass 
+        goto NAVCHARLOOP          ; else, if in INIT, only allow ':' to pass
       }
 
       when char {
@@ -732,12 +732,12 @@ main {
                 main.save_line_buffer()
                 goto NAVCHARLOOP
               }
-              $0d -> {       ; <return> replicate <esc>, would like to also followed by an immediate 'o' 
+              $0d -> {       ; <return> replicate <esc>, would like to also followed by an immediate 'o'
                 ; this part is the same as <esc>
                 toggle_nav()
                 main.save_line_buffer()
                 ; this part simulates the pressing of 'o'
-                char = $6f ; 'o' 
+                char = $6f ; 'o'
                 ; this jumpts to right after NAVACHARLOOP: and reads char as if 'o' was pressed
                 goto SKIP_NAVCHARLOOP
               }
@@ -1236,7 +1236,7 @@ main {
       main.update_tracker()
   }
 
-  ubyte default_col ; used by j & k to track the default column to feel more like what vim does 
+  ubyte default_col ; used by j & k to track the default column to feel more like what vim does
 
   ; ^
   sub jump_to_left() {
@@ -1403,7 +1403,7 @@ main {
     txt.plot(view.LEFT_MARGIN,r)
     prints(view.BLANK_LINE76)
     txt.plot(view.LEFT_MARGIN,r)
-    str tmp = " " * 76 ; main.MaxLength 
+    str tmp = " " * 76 ; main.MaxLength
     void strings.copy(addr.text, tmp)
     strings.rstrip(tmp) ; <- to get rid of straw CR or LF, but is this necessary?
     prints(tmp)
@@ -1458,7 +1458,7 @@ main {
     for i in view.RIGHT_MARGIN-1 to c+1 step -1 {
       @(curr_addr.text+i-view.LEFT_MARGIN) = @(curr_addr.text+i-view.LEFT_MARGIN-1)
     }
-    @(curr_addr.text+c-view.LEFT_MARGIN) = $20 
+    @(curr_addr.text+c-view.LEFT_MARGIN) = $20
     cursor.saved_char = $20
 
     ; prints address 'curr_addr' at row 'r'
@@ -1701,8 +1701,6 @@ main {
 
 txt {
 %option merge
-  ; !!! experimental - pure p8 version of txt.scroll_down_nlast, but takes a column offset 
-
   sub scrolldown_nlast(ubyte top_row, ubyte col_start) {
     ubyte columns, rows, j
     columns, rows = txt.size()
