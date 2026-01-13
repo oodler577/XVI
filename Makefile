@@ -17,7 +17,7 @@ $(XVI2_PP): $(XVI2_SRC)
 	cpp -P -x assembler-with-cpp $< -o $@
 
 # --- targets ---
-all: clean build bundle run
+all: build run
 
 build:
 	$(PROG8C) -target $(TARGET) src/xvi.p8
@@ -42,7 +42,9 @@ trace:
 #	$(PROG8C) -target $(TARGET) $(XVI2_PP)
 #	mv -f xvi2.pp.prg xvi2.prg
 
-xvi2:
+br: build run
+
+build:
 	$(PROG8C) -target $(TARGET) $(XVI2_SRC)
 
 run:
@@ -59,4 +61,3 @@ debug:
 clean:
 	rm -fv xvi xvi.prg xvi2 xvi2.prg *.asm strucst.* src/*.pp.p8 2> /dev/null || echo -n
 	rm -rf ./$(PKG) *.zip 2> /dev/null || echo -n
-

@@ -1,11 +1,11 @@
 ; DOING: <- start here!!
 ; - (PRIORITY) insert mode  <esc>i (most commonly used writing mode)
 ; -- build on current functionality of 'i' which is to shift right and insert space
+; -- also add 'a', which is going to append to the right of the current x,y
 ; - add fast "scroll_down" on in 'R' and hit 'enter' (currently way to slow
 ; -- when it hits draw_screen() on new buffer)
 
 ; TODO:
-; - (BUG) when in 'R' mode, entering in double quotes (") breaks replace mode
 ; - use 'R' mode over and over again - record and triage bugs
 ; - fast "save_line_buffer"
 
@@ -25,6 +25,12 @@
 ; - implement flag-based "do stuff" idea for alerts (from Tony)
 
 ; DONE:
+; - made cursor be placed more like vim does it, based on line ending and the
+; -- current "default_col"
+; - (BUG) when in 'R' mode, entering in double quotes (") breaks replace mode
+; -- due to "quotes mode", solution is to cbm.CHROUT($80) first if char == $22 (quote)
+; -- then cbm.CHROUT($22) ...
+; - saving now detects last visible character, and adds new line in the file there
 ; - 'i' now inserts a space and shifts right
 ; - add mode status, e.g., "-- REPLACE --" / "-- INSERT --" when in the correct modes
 ; - ALERTs need to be non-blocking (probably need to use interrupts?)
@@ -438,9 +444,12 @@ main {
     ubyte ub
     void diskio.f_open_w_seek(filepath)
     ^^Line line = view.INDEX[0]
+    str tmp = " " * MaxLength
+    void strings.copy(line.text, tmp)
+    void strings.rstrip(tmp)
     do {
-      for i in 0 to main.MaxLength-1 {
-        ub = @(line.text+i)     ; line.text is an address, we iterate over each byte
+      for i in 0 to strings.length(tmp)-1 {
+        ub = tmp[i]
         if ub >= 32 and ub <= 126 {
           void diskio.f_write(&ub, 1)
         }
@@ -700,15 +709,15 @@ main {
             main.update_tracker()
           }
         }
-        'I' -> {
-          flags.SAVE_AS_PETSCII = true;
-          info("Save as PETSCII enabled")
-        }
+        ;'I' -> {
+        ;  flags.SAVE_AS_PETSCII = true;
+        ;}
         'R' -> { ; edit mode (initially copy of replace writing mode)
           if main.MODE == mode.NAV {
-            RLOOP2:
             main.MODE = mode.REPLACE
             main.update_tracker()
+            RLOOP2:
+            main.MODE = mode.REPLACE
             void, char = cbm.GETIN()
             if char == $00 {
               goto RLOOP2
@@ -746,13 +755,10 @@ main {
               cursor.place(view.c(),view.r())
               goto RLOOP2
             }
-; TODO - turn off or circumvent quote mode ...
             if char == $22 {
-              txt.chrout_lit($22)
+              cbm.CHROUT($80) ; disables "quote mode" in ROM
             }
-            else {
-              cbm.CHROUT(char)
-            }
+            cbm.CHROUT(char)
             cursor.place(view.c(),view.r())
             main.update_tracker()
             goto RLOOP2
@@ -761,14 +767,14 @@ main {
 
         ; N A V I G A T I O N
         '^' -> { ; jump to start of line
-           txt.plot(view.LEFT_MARGIN, view.r())
-           cursor.place(view.c(),view.r())
-           main.update_tracker()
+          if main.MODE == mode.NAV {
+            jump_to_left()
+          }
         }
         '$' -> { ; jump top end of line
-           txt.plot(view.RIGHT_MARGIN, view.r())
-           cursor.place(view.c(),view.r())
-           main.update_tracker()
+          if main.MODE == mode.NAV {
+            jump_to_right()
+          }
         }
         'g' -> {
           if main.MODE == mode.NAV {
@@ -864,7 +870,7 @@ main {
     void debug.assert(view.INDEX[curr_line as ubyte - 1], new_prev, debug.EQ, "INDEX[curr_line as ubyte - 1] == new_prev")
     void debug.assert(view.INDEX[curr_line as ubyte], curr_addr, debug.EQ, "INDEX[curr_line as ubyte] == curr_addr")
 
-    info("P ...")
+    ;info("P ...")
     flags.UNSAVED = true
 
     if r == view.TOP_LINE {
@@ -912,7 +918,7 @@ main {
     void debug.assert(view.INDEX[curr_line as ubyte - 1], curr_addr, debug.EQ, "INDEX[curr_line as ubyte - 1] == curr_addr")
     void debug.assert(view.INDEX[curr_line as ubyte], new_next, debug.EQ, "INDEX[curr_line as ubyte] == new_next")
 
-    info("p ...")
+    ;info("p ...")
     flags.UNSAVED = true
 
     if r == view.TOP_LINE {
@@ -956,7 +962,7 @@ main {
     void debug.assert(view.INDEX[curr_line as ubyte - 1], new_prev, debug.EQ, "INDEX[curr_line as ubyte - 1] == new_prev")
     void debug.assert(view.INDEX[curr_line as ubyte], curr_addr, debug.EQ, "INDEX[curr_line as ubyte] == curr_addr")
 
-    info("O ...")
+    ;info("O ...")
     flags.UNSAVED = true
 
     if r == view.TOP_LINE {
@@ -1004,7 +1010,7 @@ main {
     void debug.assert(view.INDEX[curr_line as ubyte - 1], curr_addr, debug.EQ, "INDEX[curr_line as ubyte - 1] == curr_addr")
     void debug.assert(view.INDEX[curr_line as ubyte], new_next, debug.EQ, "INDEX[curr_line as ubyte] == new_next")
 
-    info("o ...")
+    ;info("o ...")
     flags.UNSAVED = true
 
     if r == view.BOTTOM_LINE {
@@ -1032,7 +1038,7 @@ main {
     ubyte c = view.c()
     ubyte r = view.r()
 
-    info("yy")
+    ;info("yy")
 
     ^^Line curr_addr = get_Line_addr(r) ; line being deleted
 
@@ -1226,6 +1232,37 @@ main {
       main.update_tracker()
   }
 
+  ubyte default_col ; used by j & k to track the default column to feel more like what vim does 
+
+  ; ^
+  sub jump_to_left() {
+      cursor.restore_current_char()
+      txt.plot(view.LEFT_MARGIN, view.r())
+      default_col = view.c()
+      cursor.replace(view.LEFT_MARGIN, view.r())
+      main.update_tracker()
+  }
+
+  sub get_end_col(ubyte r) -> ubyte {
+      ^^Line curr_addr = get_Line_addr(r) ; line being deleted
+      str rstripped = " " * main.MaxLength
+      void strings.copy(curr_addr.text, rstripped)
+      void strings.rstrip(rstripped)
+      return view.LEFT_MARGIN+strings.length(rstripped)-1
+  }
+
+  ; $
+  sub jump_to_right() {
+      ; find last visible character - need something like "strings.ltrimmed" but for the right side
+      ubyte end_col = get_end_col(view.r())
+      cursor.restore_current_char()
+      txt.plot(end_col, view.r())
+      default_col = view.c()
+      cursor.replace(end_col, view.r())
+      main.update_tracker()
+  }
+
+  ; g
   sub jump_to_begin() {
       if main.lineCount > view.HEIGHT {
         view.CURR_TOP_LINE = 1
@@ -1236,6 +1273,7 @@ main {
       main.update_tracker()
   }
 
+  ; G
   sub jump_to_end() {
       if main.lineCount > view.HEIGHT {
         view.CURR_TOP_LINE = main.lineCount - view.HEIGHT + 1
@@ -1256,6 +1294,23 @@ main {
     ubyte curr_line = view.r()
     ubyte curr_col  = view.c()
     ubyte next_line = curr_line-1;
+    ubyte curr_end  = get_end_col(view.c())
+    ubyte next_col  = curr_col
+    ubyte next_end  = get_end_col(next_line)
+
+    ; track end of line if at end of line in the curr_line
+    if curr_col == curr_end or curr_col >= next_end {
+      default_col = curr_col
+      next_col = next_end
+    }
+    else {
+      next_col = default_col
+    }
+
+    if next_col < view.LEFT_MARGIN {
+      next_col = view.LEFT_MARGIN
+    }
+
     if curr_line == view.TOP_LINE {
       cursor.hide()
       txt.scrolldown()
@@ -1264,10 +1319,10 @@ main {
       draw_top_line(view.CURR_TOP_LINE)
       txt.plot(0, view.BOTTOM_LINE+1) ; blank footer line
       prints(view.BLANK_LINE79)
-      cursor.replace(curr_col, curr_line)
+      cursor.replace(next_col, curr_line)
     }
     else {
-      cursor.place(curr_col,next_line)
+      cursor.place(next_col,next_line)
     }
     main.update_tracker()
   }
@@ -1291,6 +1346,22 @@ main {
     ubyte curr_line = view.r()
     ubyte curr_col  = view.c()
     ubyte next_line = curr_line + 1
+    ubyte curr_end  = get_end_col(view.c())
+    ubyte next_col  = curr_col
+    ubyte next_end  = get_end_col(next_line)
+
+    ; track end of line if at end of line in the curr_line
+    if curr_col == curr_end or curr_col >= next_end {
+      default_col = curr_col
+      next_col = next_end
+    }
+    else {
+      next_col = default_col
+    }
+
+    if next_col < view.LEFT_MARGIN {
+      next_col = view.LEFT_MARGIN
+    }
 
     if curr_line == view.BOTTOM_LINE {
       cursor.hide()
@@ -1306,7 +1377,7 @@ main {
       txt.scroll_up()
       draw_bottom_line(view.CURR_TOP_LINE + view.HEIGHT - 1)
 
-      cursor.replace(curr_col, curr_line)
+      cursor.replace(next_col, curr_line)
     } else {
       ; Only move the cursor down if there is a real document line there.
       ; Map current screen row -> document line number:
@@ -1314,7 +1385,7 @@ main {
       uword docLine = view.CURR_TOP_LINE + (curr_line - view.TOP_LINE)
 
       if docLine < main.lineCount {
-        cursor.place(curr_col, next_line)
+        cursor.place(next_col, next_line)
       }
     }
 
@@ -1323,7 +1394,7 @@ main {
 
   ; prints address 'addr' at row 'r'
   sub redraw_line(^^Line addr, ubyte r) -> ubyte {
-    info_noblock("line saved to buffer ...")
+    ;info_noblock("line saved to buffer ...")
 
     txt.plot(view.LEFT_MARGIN,r)
     prints(view.BLANK_LINE76)
@@ -1346,8 +1417,6 @@ main {
     for i in view.LEFT_MARGIN to view.RIGHT_MARGIN {
       @(curr_addr.text+(i-view.LEFT_MARGIN-1)) = txt.getchr(i-1,r)
     }
-
-    info_noblock("                        ")
 
     cursor.replace(c,r)
     txt.plot(c,r)
@@ -1394,6 +1463,7 @@ main {
     cursor.replace(c,r)
 
     txt.plot(c,r)
+    default_col = view.c()
     main.update_tracker()
   }
 
@@ -1430,6 +1500,7 @@ main {
     }
 
     txt.plot(c,r)
+    default_col = view.c()
     cursor.replace(c,r)
 
     main.update_tracker()
@@ -1439,6 +1510,7 @@ main {
     if view.c() > view.LEFT_MARGIN {
       cursor.place(view.c()-1,view.r())
     }
+    default_col = view.c()
     main.update_tracker()
   }
 
@@ -1446,6 +1518,7 @@ main {
     if view.c() < view.RIGHT_MARGIN {
       cursor.place(view.c()+1,view.r())
     }
+    default_col = view.c()
     main.update_tracker()
   }
 
