@@ -1,18 +1,18 @@
-; BUGS (PRIORITY)
-; - get crash and monitor prompt at the end of the document in some case;
-; -- need to figure out how to reproduce it
-; - ^,$  (jump to line start, line end) both do not properly replace the letter under the cursor
-
 ; DOING: <- start here!!
+; - (PRIORITY) insert mode  <esc>i (most commonly used writing mode)
+; -- build on current functionality of 'i' which is to shift right and insert space
 ; - add fast "scroll_down" on in 'R' and hit 'enter' (currently way to slow
 ; -- when it hits draw_screen() on new buffer)
-; - insert mode  <esc>i (most commonly used writing mode)
-; -- build on current functionality of 'i' which is to shift right and insert space
 
 ; TODO:
 ; - (BUG) when in 'R' mode, entering in double quotes (") breaks replace mode
 ; - use 'R' mode over and over again - record and triage bugs
 ; - fast "save_line_buffer"
+
+; BUGS
+; - get crash and monitor prompt at the end of the document in some case;
+; -- need to figure out how to reproduce it
+; - ^,$  (jump to line start, line end) both do not properly replace the letter under the cursor
 
 ; STRETCH TODO:
 ; - :set number / :set nonumber (turns line numbers on/off)
