@@ -170,7 +170,7 @@ cursor {
     ubyte r = view.r()
     txt.plot(c,r)
     if saved_char == $22 {
-      txt.chrout($80)
+      cbm.CHROUT($80)
     }
     txt.chrout(saved_char)
     txt.plot(c,r)
@@ -187,7 +187,7 @@ cursor {
     txt.plot(new_c,new_r)   ;; move cursor to new location
     save_current_char(new_c, new_r)     ;; save char in the current location (here, the new c,r)
     if saved_char == $22 {
-      txt.chrout($80)
+      cbm.CHROUT($80)
     }
     txt.chrout(saved_char)
     txt.setclr(new_c,new_r,$16) ; inverses color
@@ -212,7 +212,7 @@ cursor {
        void, cmdchar = cbm.GETIN()
        if cmdchar != $0d { ; any character now but <ENTER>
          if cmdchar == $22 {
-           txt.chrout($80)
+           cbm.CHROUT($80)
          }
          txt.chrout(cmdchar)
        }
@@ -1958,6 +1958,7 @@ main {
   }
 
   sub prints (str x) {
+    cbm.CHROUT($80)
     txt.print(x)
   }
 
