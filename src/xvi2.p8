@@ -169,6 +169,9 @@ cursor {
     ubyte c = view.c()
     ubyte r = view.r()
     txt.plot(c,r)
+    if saved_char == $22 {
+      txt.chrout($80)
+    }
     txt.chrout(saved_char)
     txt.plot(c,r)
   }
@@ -183,7 +186,10 @@ cursor {
     restore_current_char()  ;; restore char in current cursor location
     txt.plot(new_c,new_r)   ;; move cursor to new location
     save_current_char(new_c, new_r)     ;; save char in the current location (here, the new c,r)
-    txt.chrout(saved_char)  ;; write save char
+    if saved_char == $22 {
+      txt.chrout($80)
+    }
+    txt.chrout(saved_char)
     txt.setclr(new_c,new_r,$16) ; inverses color
     txt.plot(new_c,new_r)   ;; move cursor back after txt.chrout advances cursor
   }
@@ -205,7 +211,10 @@ cursor {
      CMDINPUT:
        void, cmdchar = cbm.GETIN()
        if cmdchar != $0d { ; any character now but <ENTER>
-         cbm.CHROUT(cmdchar)
+         if cmdchar == $22 {
+           txt.chrout($80)
+         }
+         txt.chrout(cmdchar)
        }
        else {
          ; reads in the command and puts it into view.cmdBuffer for additional
@@ -1315,7 +1324,7 @@ main {
 
     info_noblock("dd ...")
 
-    ; defensive: empty doc shouldn't happen, but avoid crashes
+    ; safety: if no lines, nothing to do
     if main.lineCount == 0 {
       info_noblock("      ")
       cursor.replace(c, r)
@@ -1323,35 +1332,28 @@ main {
       return
     }
 
-    ; If only 1 line remains, clear it instead of deleting the node.
+    ; safety/vim-like: if only one line, clear it instead of deleting it
     if main.lineCount == 1 {
-
       ^^Line only_addr = get_Line_addr(r)
-
-      ; save cleared line to clipboard (vim-like dd yanks)
       view.CLIPBOARD = only_addr
 
-      ; clear fixed-width buffer
       ubyte i
       for i in 0 to MaxLength-1 {
         @(only_addr.text + i) = $20
       }
-      @(only_addr.text + MaxLength) = 0   ; null terminate
+      @(only_addr.text + MaxLength) = 0
 
-      ; redraw just this row
       void redraw_line(only_addr, r)
 
       flags.UNSAVED = true
       info_noblock("      ")
 
-      ; keep cursor sane
       txt.plot(view.LEFT_MARGIN, r)
       cursor.replace(view.LEFT_MARGIN, r)
       main.update_tracker()
       return
     }
 
-    ; normal delete behavior (existing logic)
     ^^Line curr_addr = get_Line_addr(r) ; line being deleted
     ^^Line prev_addr = curr_addr.prev   ; line before line being deleted
     ^^Line next_addr = curr_addr.next   ; line after line being deleted
@@ -1360,12 +1362,17 @@ main {
     void view.push_freed(curr_addr)
 
     ; short circuit curr_line out of links
-    prev_addr.next = next_addr
+    if prev_addr != 0 {
+      prev_addr.next = next_addr
+    }
     if next_addr != 0 {                   ; make sure curr_line is not last line of doc
       next_addr.prev = prev_addr
     }
 
-    main.lineCount = view.delete_item(main.get_line_num(r), main.lineCount)
+    ; compute whether we just deleted the last document line
+    uword deleted_line = main.get_line_num(r)
+
+    main.lineCount = view.delete_item(deleted_line, main.lineCount)
 
     draw_screen()
 
@@ -1375,6 +1382,15 @@ main {
 
     info_noblock("      ")
 
+    ; If we deleted the last document line, move cursor up one screen row (if possible)
+    if deleted_line > main.lineCount {
+      if r > view.TOP_LINE {
+        r = r - 1
+      }
+      c = view.LEFT_MARGIN
+    }
+
+    txt.plot(c, r)
     cursor.replace(c, r)
     main.update_tracker()
   }
@@ -1466,7 +1482,7 @@ main {
         r = view.r()
         prints(view.BLANK_LINE79)
         txt.plot(0,r)
-        prints("~")
+        prints("~   ")
         txt.plot(0,r+1)
       }
 
