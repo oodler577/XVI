@@ -448,6 +448,13 @@ main {
      str oldback = " " * 60
      void strings.copy(doc.filepath,oldback)
      strings.trim(oldback)
+
+     ; GUARD: new/unnamed buffer
+     if strings.length(oldback) == 0 {
+       warn("No filename. Use :w filename")
+       return
+     }
+
      void strings.append(oldback, ".swp") ; basically vi's .swp file
      if diskio.exists(oldback) {
        diskio.delete(oldback)
@@ -663,11 +670,17 @@ main {
                   }
                 }
                 else {
-                  save_current_file()
+                  ; GUARD: refuse :w with no name on a new buffer
+                  str cur = " " * 60
+                  void strings.copy(doc.filepath, cur)
+                  strings.trim(cur)
+                  if strings.length(cur) == 0 {
+                    warn("No filename. Use :w filename")
+                  }
+                  else {
+                    save_current_file()
+                  }
                 }
-              }
-              else -> {
-                warn("Unknown command ...")
               }
             }
           }
@@ -808,7 +821,7 @@ main {
                 char = $6f ; 'o'
                 goto SKIP_NAVCHARLOOP
               }
-              $14 -> {       ; <backspace> / DEL
+              $14, $08, $7f -> {  ; backspace variants (DEL/BS)
                 goto INSERTMODE2
               }
               else -> {
@@ -865,7 +878,7 @@ main {
                 char = $6f ; 'o'
                 goto SKIP_NAVCHARLOOP
               }
-              $14 -> {       ; <backspace> / DEL
+              $14, $08, $7f -> {  ; backspace variants (DEL/BS)
                 goto INSERTMODE
               }
               else -> {
@@ -922,7 +935,7 @@ main {
                 char = $6f ; 'o'
                 goto SKIP_NAVCHARLOOP
               }
-              $14 -> {       ; <backspace> / DEL
+              $14, $08, $7f -> {  ; backspace variants (DEL/BS)
                 goto REPLACEMODE
               }
               else -> {
