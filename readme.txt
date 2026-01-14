@@ -1,54 +1,16 @@
-README.TXT
-
-                XVI 1.2.0 - THE VI CLONE FOR THE COMMANDER X16                    
+XVI 2.0 (pre-ALPHA) - Quick Help + Test Sheet (Commander X16)               
                                                                             
-WRITING MODE:                                                               
-    SHIFT+R   - STANDARD REPLACE MODE                                       
-          I   - WRITE MODE, CURRENTLY "OVERWRITE" MODE UNLIKE *NIX VI       
+This file is meant to be READ inside of XVI and als used as a TEST script.  
+Try the actions exactly as written and verify the result feels Vim-like.    
                                                                             
-NAVIGATION MODE:                                                            
-     <ESC>    - PLACES USER IN "NAVIGATION" (NAV) MODE                      
-     <NUM> G  - JUMP TO LINE <NUM>                                          
-   <SHIFT>+G  - JUMP TO LAST LINE ON SCREEN                                 
-        K     - "UP"                                                        
-     H  +  L  - "LEFT" AND "RIGHT"                                          
-        J     - "DOWN"                       [* ARROW KEYS SUPPORTED]       
+------------------------------------------------------------------------
+STARTUP                                                                     
+------------------------------------------------------------------------
                                                                             
-EDITING MODE:                                                               
-          YY  - "YANK" A WHILE LINE, AVAILABLE FOR PASTING                  
-          DD  - DELETE A WHOLE LINE, AVAILABLE FOR PASTING                  
-           P  - PASTE A LINE BELOW                                          
-   <SHIFT>+P  - PASTE A LINE ABOVE                                          
-           O  - CREATE A NEW LINE BELOW CURRENT LINE                        
-   <SHIFT>+O  - CREATE A NEW LINE ABOVE CURRENT LINE                        
-           X  - DELETE CURRENT CHARACTER, LEFT SHIFT CURRENT LINE (NO PAST  
-     <SPACE>  - RIGHT SHIFT LINE                                            
+Splash screen:                                                              
                                                                             
-COMMAND MODE:                                                               
-    <ESC> <SHIFT>+:           - MAKES A COMMAND PROMPT AVAILABLE            
+  :e         filename<Enter> Load a file                                    
+  <esc>R     New buffer in REPLACE mode                                     
+  <esc>i     New buffer in INSERT mode                                      
                                                                             
-  SUPPORTED COMMANDS:                                                       
-           E PATH/TO/FILE.EXT - OPEN A FILE FOR EDITING                     
-           Q                  - QUIT TO BASIC PROMPT                        
                                                                             
-TODO BEFORE 1.0 RELEASE:                                                    
-                                                                            
- * SAVE SCREEN CONTENTS TO FILE ON DISK:                                    
-      <ESC> <SHIFT>+: W PATH/TO/FILE.EXT                                    
- * (STRETCH) CURSOR SHOWS CHARACTER UNDER IT                                
-                                                                            
-TODO AFTER 1.0 RELEASE:                                                     
-                                                                            
- * SUPPORT FILES > 54 LINES LONG (OUTSIDE OF VIEW PORT)                     
- * MOVE TO ISO MODE SO XVI IS SUITABLE FOR C CODE                           
- * FIGURE OUT ACTUAL "INSERT" MODE (CAN'T DO IT WITH VTUI)                  
- * FIGURE OUT "R" TO REPLACE SINGLE CHARACTERS (ALSO DUE TO VTUI LIMIT)     
- * TRACK FILENAME SO ":W" JUST WORKS                                        
- * MAKE CHARACTER DELETED WITH "X" AVAILABLE FOR PASTING                    
- * SUPPORT COMMANDS TO SHOW/HIDE LINE NUMBERS                               
-                                                                            
-PROJECT CODE REPO:                                                          
-  HTTPS://GITHUB.COM/OODLER577/XVI                                          
-
-                                                                            
-                XVI - THE VI CLONE FOR THE COMMANDER X16                    

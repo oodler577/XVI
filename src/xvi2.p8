@@ -1315,6 +1315,43 @@ main {
 
     info_noblock("dd ...")
 
+    ; defensive: empty doc shouldn't happen, but avoid crashes
+    if main.lineCount == 0 {
+      info_noblock("      ")
+      cursor.replace(c, r)
+      main.update_tracker()
+      return
+    }
+
+    ; If only 1 line remains, clear it instead of deleting the node.
+    if main.lineCount == 1 {
+
+      ^^Line only_addr = get_Line_addr(r)
+
+      ; save cleared line to clipboard (vim-like dd yanks)
+      view.CLIPBOARD = only_addr
+
+      ; clear fixed-width buffer
+      ubyte i
+      for i in 0 to MaxLength-1 {
+        @(only_addr.text + i) = $20
+      }
+      @(only_addr.text + MaxLength) = 0   ; null terminate
+
+      ; redraw just this row
+      void redraw_line(only_addr, r)
+
+      flags.UNSAVED = true
+      info_noblock("      ")
+
+      ; keep cursor sane
+      txt.plot(view.LEFT_MARGIN, r)
+      cursor.replace(view.LEFT_MARGIN, r)
+      main.update_tracker()
+      return
+    }
+
+    ; normal delete behavior (existing logic)
     ^^Line curr_addr = get_Line_addr(r) ; line being deleted
     ^^Line prev_addr = curr_addr.prev   ; line before line being deleted
     ^^Line next_addr = curr_addr.next   ; line after line being deleted
