@@ -552,8 +552,10 @@ main {
 
       when char {
         $1b -> {       ; ESC key, throw into NAV mode from any other mode
+         if main.MODE == mode.INIT {
+            init_empty_buffer(1)
+          }
           toggle_nav()
-          init_empty_buffer(1)
         }
         $3a -> {       ; ':',  mode
           if main.MODE == mode.NAV {
@@ -1494,7 +1496,6 @@ main {
     return strings.length(tmp) ; <- still we can get length, and this can be helpful
   }
 
-  ; save text written to the video RAM and saves it into the document's line buffer
   sub save_line_buffer() {
     ubyte c = view.c()
     ubyte r = view.r()
@@ -1503,7 +1504,7 @@ main {
 
     ubyte i
     for i in view.LEFT_MARGIN to view.RIGHT_MARGIN {
-      @(curr_addr.text+(i-view.LEFT_MARGIN-1)) = txt.getchr(i-1,r)
+      @(curr_addr.text + (i - view.LEFT_MARGIN)) = txt.getchr(i, r)
     }
 
     cursor.replace(c,r)
@@ -1732,7 +1733,7 @@ txt {
         uword vera_addr = lsw(txt.VERA_TEXTMATRIX) + 256*rows
         cx16.vaddr(msw(txt.VERA_TEXTMATRIX), vera_addr+col_start,     0 ,1) ; source row
         cx16.vaddr(msw(txt.VERA_TEXTMATRIX), vera_addr+col_start+256, 1, 1) ; target row
-        for j in col_start to columns {
+        for j in col_start to columns-1 {
             cx16.VERA_DATA1 = cx16.VERA_DATA0       ; copy tile
             cx16.VERA_DATA1 = cx16.VERA_DATA0       ; copy color
         }
