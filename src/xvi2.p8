@@ -776,15 +776,23 @@ main {
                 goto NAVCHARLOOP
               }
               $0d -> {       ; <return> replicate <esc>, would like to also followed by an immediate 'o'
-                ; this part is the same as <esc>
                 toggle_nav()
                 main.save_line_buffer()
-                ; this part simulates the pressing of 'o'
                 char = $6f ; 'o'
-                ; this jumpts to right after NAVACHARLOOP: and reads char as if 'o' was pressed
                 goto SKIP_NAVCHARLOOP
               }
-              else -> { ; backspace
+              $14 -> {       ; <backspace> / DEL
+                goto REPLACEMODE
+              }
+              else -> {
+                ; only accept printable ISO range
+                if char < 32 or char > 126 {
+                  goto RLOOP2
+                }
+                ; if it's a double-quote, clear quote mode first for compatibility
+                if char == $22 {
+                  cbm.CHROUT($80) ; disables "quote mode" in ROM
+                }
                 goto REPLACEMODE
               }
             }
@@ -802,9 +810,7 @@ main {
               cursor.place(view.c(),view.r())
               goto RLOOP2
             }
-            if char == $22 {
-              cbm.CHROUT($80) ; disables "quote mode" in ROM
-            }
+            ; only write printable bytes (and quote already handled above)
             cbm.CHROUT(char)
             cursor.place(view.c(),view.r())
             main.update_tracker()
