@@ -366,12 +366,29 @@ main {
         ; read line
         ubyte length
         length, void = diskio.f_readline(lineBuffer)
+
+        ; normalize line ending + whitespace
         strings.rstrip(lineBuffer)
+
+        ; sanitize to match Insert/Replace printable ISO policy
+        ubyte i
+        for i in 0 to MaxLength-1 {
+          ubyte ch = lineBuffer[i]
+          if ch == 0 {
+            break
+          }
+          if ch < 32 or ch > 126 {
+            lineBuffer[i] = $20
+          }
+        }
+
+        ; enforce max length AFTER sanitizing
         if length > MaxLength {
           str tmp = " " * (MaxLength + 1)
           strings.slice(lineBuffer, 0, MaxLength, tmp)
           void strings.copy(tmp, lineBuffer)
         }
+
         uword lineAddr = allocLine(lineBuffer)
         idx = main.lineCount as ubyte
         view.INDEX[idx] = lineAddr
