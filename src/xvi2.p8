@@ -415,8 +415,8 @@ main {
     say("~                             Sponsor Prog8 development!           ")
     say("~                                  http://p8ug.org                 ")
     say("~                                                                  ")
-    say("                   type  R to open new buffer in Replace mode      ")
-    say("                   type  i to open new buffer in Insert  mode      ")
+    say("~                  type  <esc>R to open new buffer in Replace mode ")
+    say("~                  type  <esc>i to open new buffer in Insert  mode ")
     say("~                  type  :e filepath<Enter>    to load file to edit")
     say("~                  type  :q<Enter>             to exit             ")
     repeat 24 {
@@ -492,9 +492,8 @@ main {
 
     sys.wait(20)
     ;load_file("sample6.txt")
-
-    draw_initial_screen()
-    cursor.place(view.LEFT_MARGIN, view.TOP_LINE)
+    ;draw_initial_screen()
+    ;cursor.place(view.LEFT_MARGIN, view.TOP_LINE)
 
     main.update_tracker()
 
@@ -515,24 +514,11 @@ main {
       if char == $00 {
         goto NAVCHARLOOP
       }
-      else if main.MODE == mode.INIT and (char == 'R' or char == 'i') {
-        main.MODE = mode.NAV
-        cursor.cmdBuffer[0] = 'e'
-        goto SKIP_COMMANDPROMPT   ; simulate ":e" from initial screen
-      }
-      else if main.MODE == mode.INIT and char != ':' {
-        goto NAVCHARLOOP          ; else, if in INIT, only allow ':' to pass
-      }
 
       when char {
-        $0c -> {  ; this is a "form feed", and I have no idea why I put this here
-          view.CURR_TOP_LINE = 1
-          draw_initial_screen()
-          cursor.replace(view.LEFT_MARGIN, view.TOP_LINE)
-          toggle_nav()
-        }
         $1b -> {       ; ESC key, throw into NAV mode from any other mode
           toggle_nav()
+          init_empty_buffer(1)
         }
         $3a -> {       ; ':',  mode
           if main.MODE == mode.NAV {
@@ -589,7 +575,10 @@ main {
               }
               'q' -> {
                 if flags.UNSAVED == true and not force {
-                    warn("Unsaved changes exist. Use q! to override ...")
+                  warn("Unsaved changes exist. Use q! to override ...")
+                }
+                else {
+                  sys.exit(0)
                 }
               }
               'w' -> {
