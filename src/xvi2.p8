@@ -295,6 +295,7 @@ main {
     this.next = 0
     this.text = txtbuf
     void strings.copy(initial, this.text)
+    @(this.text + MaxLength) = 0         ; null terminate
 
     tail = this
     ; and return
@@ -312,7 +313,8 @@ main {
     this.text = txtbuf
     strings.trim(initial)
     void strings.copy(view.BLANK_LINE79, this.text) ; initialize with BLANK_LINE79, eliminates random garbage
-    void strings.copy(initial, this.text)         ; then add text
+    void strings.copy(initial, this.text); then add text
+    @(this.text + MaxLength) = 0         ; null terminate
     return this
   }
 
@@ -453,52 +455,44 @@ main {
      diskio.rename(doc.filepath, oldback)
      save_as(doc.filepath)
   }
-
-;; mostly working, but some kinks left - for another time!!
+  
   sub save_as(str filepath) {
     info_noblock("saving ...")
-
+  
     ubyte i
     ubyte ub
     void diskio.f_open_w_seek(filepath)
-
-    ; guard: empty document (prevents INDEX[0] crash)
+  
     if main.lineCount == 0 {
       diskio.f_close_w()
       flags.UNSAVED = false
       info_noblock("          ")
       return
     }
-
+  
     ^^Line line = view.INDEX[0]
-
+  
     do {
-      ; refresh tmp for EACH line (fixes "writes first line repeatedly")
-      str tmp = " " * (MaxLength + 1)
-      void strings.copy(line.text, tmp)
-      strings.rstrip(tmp)
-
-      ubyte L = strings.length(tmp)
-      if L > 0 {
-        for i in 0 to L-1 {
-          ub = tmp[i]
-          if ub >= 32 and ub <= 126 {
-            void diskio.f_write(&ub, 1)
-          }
+      ; write only printable ISO bytes from the fixed-width line buffer
+      for i in 0 to MaxLength-1 {
+        ub = @(line.text + i)
+        if ub == 0 {
+          break
+        }
+        if ub >= 32 and ub <= 126 {
+          void diskio.f_write(&ub, 1)
         }
       }
-
-      ;; trying to get the line endings correct (ChatGPT!)
+  
       ub = $0a
-      void diskio.f_write(&ub, 1) ; LF
-
+      void diskio.f_write(&ub, 1)
+  
       line = line.next
     } until line == 0
-
+  
     diskio.f_close_w()
-
+  
     flags.UNSAVED = false
-
     info_noblock("          ")
   }
 
@@ -574,6 +568,12 @@ main {
                 main.update_tracker()
                 goto ILOOP
               }
+              'a' -> {
+                init_empty_buffer(1)
+                main.MODE = mode.INSERT
+                main.update_tracker()
+                goto ALOOP
+              }
               else -> {
                 ; fall back to normal NAV
                 init_empty_buffer(1)
@@ -636,6 +636,8 @@ main {
                 else {
                   init_empty_buffer(1)
                   char = 'R'
+                  flags.UNSAVED = true
+                  main.update_tracker()
                   goto main.start.SKIP_NAVCHARLOOP
                 }
               }
@@ -644,6 +646,7 @@ main {
                   warn("Unsaved changes exist. Use q! to override ...")
                 }
                 else {
+                  txt.clear_screenchars($20) 
                   sys.exit(0)
                 }
               }
@@ -766,6 +769,78 @@ main {
             main.insert_char_shift_right($20) ; initially just adds space, then drop to 'R'
             main.MODE = mode.NAV
             main.update_tracker()
+          }
+        }
+        'a' -> { ; append after cursor (vim-like)
+          if main.MODE == mode.NAV {
+
+            ; --- VIM SEMANTICS: move one char right before inserting ---
+            ubyte ac = view.c()
+            ubyte ar = view.r()
+
+            ; editable area is LEFT_MARGIN .. RIGHT_MARGIN-1
+            if ac < view.LEFT_MARGIN {
+              ac = view.LEFT_MARGIN
+            }
+            if ac < view.RIGHT_MARGIN-1 {
+              cursor.place(ac+1, ar)
+            }
+            else {
+              cursor.place(view.RIGHT_MARGIN-1, ar)
+            }
+            main.MODE = mode.INSERT
+            main.update_tracker()
+            ALOOP:
+            main.MODE = mode.INSERT
+            void, char = cbm.GETIN()
+            if char == $00 {
+              goto ALOOP
+            }
+            when char {
+              $1b -> {       ; <esc> throw into NAV mode from any other mode
+                toggle_nav()
+                main.save_line_buffer()
+                goto NAVCHARLOOP
+              }
+              $0d -> {       ; <return> replicate <esc>, would like to also followed by an immediate 'o'
+                toggle_nav()
+                main.save_line_buffer()
+                char = $6f ; 'o'
+                goto SKIP_NAVCHARLOOP
+              }
+              $14 -> {       ; <backspace> / DEL
+                goto INSERTMODE2
+              }
+              else -> {
+                ; only accept printable ISO range
+                if char < 32 or char > 126 {
+                  goto ALOOP
+                }
+                ; if it's a double-quote, clear quote mode first for compatibility
+                if char == $22 {
+                  cbm.CHROUT($80)
+                }
+                goto INSERTMODE2
+              }
+            }
+            goto ALOOP
+            INSERTMODE2:
+            if view.c() < view.LEFT_MARGIN {       ; this is where to handle backspace past left margine
+              cursor.hide()
+              txt.plot(view.LEFT_MARGIN, view.r())
+              cursor.place(view.c(),view.r())
+              goto ALOOP
+            }
+            if view.c() == view.RIGHT_MARGIN {   ; this is where to handle back
+              cursor.hide()
+              txt.plot(view.RIGHT_MARGIN-1, view.r())
+              cursor.place(view.c(),view.r())
+              goto ALOOP
+            }
+            main.insert_char_shift_right(char)
+            cursor.place(view.c()+1,view.r())
+            main.update_tracker()
+            goto ALOOP
           }
         }
         'i' -> { ; edit mode (initially copy of replace writing mode)
@@ -1363,22 +1438,53 @@ main {
   }
 
   sub get_end_col(ubyte r) -> ubyte {
-      ^^Line curr_addr = get_Line_addr(r) ; line being deleted
-      str rstripped = " " * main.MaxLength
-      void strings.copy(curr_addr.text, rstripped)
-      strings.rstrip(rstripped)
-      return view.LEFT_MARGIN+strings.length(rstripped)-1
+    ^^Line curr_addr = get_Line_addr(r)
+  
+    ; Find last printable ISO byte (32..126) in the line buffer.
+    ; If none, return LEFT_MARGIN.
+    ubyte last = 255
+    ubyte i
+    for i in 0 to main.MaxLength-1 {
+      ubyte ch = @(curr_addr.text + i)
+      if ch == 0 {
+        break
+      }
+      if ch >= 32 and ch <= 126 and ch != $20 {  ; treat space as not “visible”
+        last = i
+      }
+    }
+  
+    if last == 255 {
+      return view.LEFT_MARGIN
+    }
+  
+    uword col = view.LEFT_MARGIN + last
+    if col > view.RIGHT_MARGIN {
+      col = view.RIGHT_MARGIN
+    }
+    return col as ubyte
   }
 
   ; $
   sub jump_to_right() {
-      ; find last visible character - need something like "strings.ltrimmed" but for the right side
-      ubyte end_col = get_end_col(view.r())
-      cursor.restore_current_char()
-      txt.plot(end_col, view.r())
-      default_col = view.c()
-      cursor.replace(end_col, view.r())
-      main.update_tracker()
+    ; don’t allow footer/top status lines to be treated as document rows
+    ubyte r = view.r()
+    if r < view.TOP_LINE or r > view.BOTTOM_LINE {
+      return
+    }
+  
+    ; empty document guard
+    if main.lineCount == 0 {
+      return
+    }
+  
+    ubyte end_col = get_end_col(r)
+  
+    cursor.restore_current_char()
+    txt.plot(end_col, r)
+    default_col = view.c()
+    cursor.replace(end_col, r)
+    main.update_tracker()
   }
 
   ; g
@@ -1528,14 +1634,15 @@ main {
   sub save_line_buffer() {
     ubyte c = view.c()
     ubyte r = view.r()
-
-    ^^Line curr_addr = get_Line_addr(r)    ; gets memory addr of current Line
-
+  
+    ^^Line curr_addr = get_Line_addr(r)
+  
     ubyte i
-    for i in view.LEFT_MARGIN to view.RIGHT_MARGIN {
-      @(curr_addr.text + (i - view.LEFT_MARGIN)) = txt.getchr(i, r)
+    for i in 0 to MaxLength-1 {
+      @(curr_addr.text + i) = txt.getchr(view.LEFT_MARGIN + i, r)
     }
-
+    @(curr_addr.text + MaxLength) = 0      ; null terminate
+  
     cursor.replace(c,r)
     txt.plot(c,r)
     main.update_tracker()
@@ -1543,21 +1650,36 @@ main {
 
   ; in NAV mode, `r <char>`
   sub replace_char(ubyte char) {
+    ; accept only printable ISO
+    if char < 32 or char > 126 {
+      return
+    }
+
     ubyte c = view.c()
     ubyte r = view.r()
 
+    ; guard against cursor outside editable region
+    if c < view.LEFT_MARGIN {
+      c = view.LEFT_MARGIN
+    }
+    if c > view.RIGHT_MARGIN-1 {
+      return
+    }
+    if r < view.TOP_LINE or r > view.BOTTOM_LINE {
+      return
+    }
+
     ^^Line curr_addr = get_Line_addr(r)    ; gets memory addr of current Line
 
-    ; remove char at (c,r) then shift everything to the left
-
-    @(curr_addr.text+c-view.LEFT_MARGIN) = char
+    ; replace char at (c,r)
+    @(curr_addr.text + (c - view.LEFT_MARGIN)) = char
+    @(curr_addr.text + MaxLength) = 0       ; null terminate
     cursor.saved_char = char
 
-    ; prints address 'curr_addr' at row 'r'
+    ; redraw line
     void redraw_line(curr_addr, r)
 
     cursor.replace(c,r)
-
     txt.plot(c,r)
     main.update_tracker()
   }
@@ -1567,24 +1689,34 @@ main {
     if char < 32 or char > 126 {
       return
     }
-
+  
     ubyte c = view.c()
     ubyte r = view.r()
-
-    ^^Line curr_addr = get_Line_addr(r)    ; gets memory addr of current Line
-
+  
+    ; hard guard: prevent out-of-range writes
+    if c < view.LEFT_MARGIN {
+      c = view.LEFT_MARGIN
+    }
+    if c > view.RIGHT_MARGIN-1 {
+      return
+    }
+  
+    ^^Line curr_addr = get_Line_addr(r)
+  
     ubyte i
     for i in view.RIGHT_MARGIN-1 to c+1 step -1 {
-      @(curr_addr.text+i-view.LEFT_MARGIN) = @(curr_addr.text+i-view.LEFT_MARGIN-1)
+      @(curr_addr.text + (i - view.LEFT_MARGIN)) = @(curr_addr.text + (i - view.LEFT_MARGIN - 1))
     }
-    @(curr_addr.text+c-view.LEFT_MARGIN) = char
+  
+    @(curr_addr.text + (c - view.LEFT_MARGIN)) = char
+    @(curr_addr.text + MaxLength) = 0       ; null terminate
+  
     cursor.saved_char = char
-
-    ; prints address 'curr_addr' at row 'r'
+  
     void redraw_line(curr_addr, r)
-
+  
     cursor.replace(c,r)
-
+  
     txt.plot(c,r)
     default_col = view.c()
     main.update_tracker()
@@ -1594,32 +1726,48 @@ main {
     ubyte c = view.c()
     ubyte r = view.r()
 
+    ; guard against cursor outside editable region
+    if c < view.LEFT_MARGIN {
+      c = view.LEFT_MARGIN
+    }
+    if c > view.RIGHT_MARGIN-1 {
+      return
+    }
+    if r < view.TOP_LINE or r > view.BOTTOM_LINE {
+      return
+    }
+
     ^^Line curr_addr = get_Line_addr(r)    ; gets memory addr of current Line
 
     ; remove char at (c,r) then shift everything to the left
-
-    @(curr_addr.text+c-view.LEFT_MARGIN) = $20
+    @(curr_addr.text + (c - view.LEFT_MARGIN)) = $20
     cursor.saved_char = $20
 
-    uword i
-    for i in c to 80-1 {
-      @(curr_addr.text+i-view.LEFT_MARGIN) = @(curr_addr.text+i-view.LEFT_MARGIN+1)
+    ; shift left within the fixed-width buffer [0..MaxLength-1]
+    ubyte i
+    ubyte start = c - view.LEFT_MARGIN
+    for i in start to MaxLength-2 {
+      @(curr_addr.text + i) = @(curr_addr.text + i + 1)
     }
-    @(curr_addr.text+80-view.LEFT_MARGIN) = $20
+    @(curr_addr.text + (MaxLength - 1)) = $20
+    @(curr_addr.text + MaxLength) = 0     ; null terminate
 
-    ; prints address 'curr_addr' at row 'r'
+    ; redraw + get visible length from redraw_line()
     ubyte length = redraw_line(curr_addr, r)
 
-    ; this will keep the site of subsequent 'x' in the right space
-    ; if in the middle of a line; if the end of the line has been
-    ; reached it follows the last character in the line
-    if c >= view.LEFT_MARGIN + length {
+    ; keep cursor in a sane spot
+    if length == 0 {
+      c = view.LEFT_MARGIN
+    }
+    else if c >= view.LEFT_MARGIN + length {
       c = view.LEFT_MARGIN + length - 1
     }
 
-    ; don't go too far left
     if c < view.LEFT_MARGIN {
       c = view.LEFT_MARGIN
+    }
+    if c > view.RIGHT_MARGIN-1 {
+      c = view.RIGHT_MARGIN-1
     }
 
     txt.plot(c,r)
