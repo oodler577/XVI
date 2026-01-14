@@ -704,18 +704,64 @@ main {
             main.delete_xy_shift_left()
           }
         }
-        'i' -> {
+        's' -> {
           if main.MODE == mode.NAV {
             main.MODE = mode.INSERT
             main.update_tracker()
-            main.insert_space_xy_shift_right() ; initially just adds space, then drop to 'R'
+            main.insert_char_shift_right($20) ; initially just adds space, then drop to 'R'
             main.MODE = mode.NAV
             main.update_tracker()
           }
         }
-        ;'I' -> {
-        ;  flags.SAVE_AS_PETSCII = true;
-        ;}
+        'i' -> { ; edit mode (initially copy of replace writing mode)
+          if main.MODE == mode.NAV {
+            main.MODE = mode.INSERT
+            main.update_tracker()
+            ILOOP:
+            main.MODE = mode.INSERT
+            void, char = cbm.GETIN()
+            if char == $00 {
+              goto ILOOP
+            }
+            when char {
+              $1b -> {       ; <esc> throw into NAV mode from any other mode
+                toggle_nav()
+                main.save_line_buffer()
+                goto NAVCHARLOOP
+              }
+              $0d -> {       ; <return> replicate <esc>, would like to also followed by an immediate 'o'
+                ; this part is the same as <esc>
+                toggle_nav()
+                main.save_line_buffer()
+                ; this part simulates the pressing of 'o'
+                char = $6f ; 'o'
+                ; this jumpts to right after NAVACHARLOOP: and reads char as if 'o' was pressed
+                goto SKIP_NAVCHARLOOP
+              }
+              else -> { ; backspace
+                goto INSERTMODE
+              }
+            }
+            goto ILOOP
+            INSERTMODE:
+            if view.c() < view.LEFT_MARGIN {       ; this is where to handle backspace past left margine
+              cursor.hide()
+              txt.plot(view.LEFT_MARGIN, view.r())
+              cursor.place(view.c(),view.r())
+              goto ILOOP
+            }
+            if view.c() == view.RIGHT_MARGIN {   ; this is where to handle back
+              cursor.hide()
+              txt.plot(view.RIGHT_MARGIN-1, view.r())
+              cursor.place(view.c(),view.r())
+              goto ILOOP
+            }
+            main.insert_char_shift_right(char)
+            cursor.place(view.c()+1,view.r())
+            main.update_tracker()
+            goto ILOOP
+          }
+        }
         'R' -> { ; edit mode (initially copy of replace writing mode)
           if main.MODE == mode.NAV {
             main.MODE = mode.REPLACE
@@ -1448,7 +1494,7 @@ main {
     main.update_tracker()
   }
 
-  sub insert_space_xy_shift_right() {
+  sub insert_char_shift_right(ubyte char) {
     ubyte c = view.c()
     ubyte r = view.r()
 
@@ -1458,8 +1504,8 @@ main {
     for i in view.RIGHT_MARGIN-1 to c+1 step -1 {
       @(curr_addr.text+i-view.LEFT_MARGIN) = @(curr_addr.text+i-view.LEFT_MARGIN-1)
     }
-    @(curr_addr.text+c-view.LEFT_MARGIN) = $20
-    cursor.saved_char = $20
+    @(curr_addr.text+c-view.LEFT_MARGIN) = char
+    cursor.saved_char = char
 
     ; prints address 'curr_addr' at row 'r'
     void redraw_line(curr_addr, r)
@@ -1579,19 +1625,6 @@ main {
     txt.nl()
   }
 
-;  sub sayb (ubyte x) {
-;    printb(x)
-;    txt.nl()
-;  }
-
-;  sub printb (ubyte x) {
-;    txt.print_ub0(x)
-;  }
-
-;  sub printB (ubyte x) {
-;    txt.print_ub(x)
-;  }
-
   sub printw (uword x) {
     txt.print_uw0(x)
   }
@@ -1599,15 +1632,6 @@ main {
   sub printW (uword x) {
     txt.print_uw(x)
   }
-
-;  sub printH (uword x) {
-;    txt.print_uwhex(x, true)
-;  }
-
-;  sub sayH (uword x) {
-;    main.printH(x)
-;    txt.nl()
-;  }
 
   sub info_noblock_LEFT(str message) {
     alert_noblock_LEFT(message, $7, $6)
@@ -1633,10 +1657,6 @@ main {
     txt.color2($1, $6) ; sets text back to default, white on blue
   }
 
-  sub info(str message) {
-    alert(message, 15, $7, $6)
-  }
-
   sub warn(str message) {
     alert(message, 120, $2, $1)
   }
@@ -1655,52 +1675,11 @@ main {
     prints(view.BLANK_LINE79)
     txt.plot(c,r)
   }
-
-  sub infoW(uword message) {
-    alertW(message, 15, $7, $6)
-  }
-
-;  sub warnW(uword message) {
-;    alertW(message, 120, $2, $1)
-;  }
-
-  sub alertW(uword message, ubyte delay, ubyte color1, ubyte color2) {
-    ubyte c = view.c()
-    ubyte r = view.r()
-    txt.plot(74, 0)
-    txt.color2(color1, color2)
-    printW(message)
-    sys.wait(delay)
-    txt.plot(74, 0)
-    txt.color2($1, $6) ; sets text back to default, white on blue
-    txt.plot(view.LEFT_MARGIN, 0)
-    prints(view.BLANK_LINE79)
-    txt.plot(c,r)
-  }
-
-;  sub infoH(uword message) {
-;    alertH(message, 15, $7, $6)
-;  }
-;
-;  sub warnH(uword message) {
-;    alertH(message, 120, $2, $1)
-;  }
-;
-;  sub alertH(uword message, ubyte delay, ubyte color1, ubyte color2) {
-;    txt.plot(74, 0)
-;    txt.color2(color1, color2)
-;    printH(message)
-;    sys.wait(delay)
-;    txt.plot(74, 0)
-;    txt.color2($1, $6) ; sets text back to default, white on blue
-;    txt.plot(view.LEFT_MARGIN, 0)
-;    prints(view.BLANK_LINE79)
-;  }
-
 }
 
 txt {
-%option merge
+  %option merge
+
   sub scrolldown_nlast(ubyte top_row, ubyte col_start) {
     ubyte columns, rows, j
     columns, rows = txt.size()
