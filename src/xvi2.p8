@@ -551,10 +551,39 @@ main {
       }
 
       when char {
-        $1b -> {       ; ESC key, throw into NAV mode from any other mode
-         if main.MODE == mode.INIT {
-            init_empty_buffer(1)
+        $1b -> {       ; ESC key
+          ; On splash/INIT: treat ESC as a prefix so ESC+R / ESC+i is instant.
+          if main.MODE == mode.INIT {
+
+            ; grab the next key (wait until we actually get one)
+            ubyte k = $00
+            while k == $00 {
+              void, k = cbm.GETIN()
+            }
+
+            when k {
+              'R' -> {
+                init_empty_buffer(1)
+                main.MODE = mode.REPLACE
+                main.update_tracker()
+                goto RLOOP2
+              }
+              'i' -> {
+                init_empty_buffer(1)
+                main.MODE = mode.INSERT
+                main.update_tracker()
+                goto ILOOP
+              }
+              else -> {
+                ; fall back to normal NAV
+                init_empty_buffer(1)
+                toggle_nav()
+                goto NAVCHARLOOP
+              }
+            }
           }
+
+          ; Normal behavior outside INIT
           toggle_nav()
         }
         $3a -> {       ; ':',  mode
