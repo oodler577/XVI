@@ -787,11 +787,9 @@ main {
         'a' -> { ; append after cursor (vim-like)
           if main.MODE == mode.NAV {
 
-            ; --- VIM SEMANTICS: move one char right before inserting ---
+            ; move one char right before inserting (append-after-cursor)
             ubyte ac = view.c()
             ubyte ar = view.r()
-
-            ; editable area is LEFT_MARGIN .. RIGHT_MARGIN-1
             if ac < view.LEFT_MARGIN {
               ac = view.LEFT_MARGIN
             }
@@ -801,28 +799,31 @@ main {
             else {
               cursor.place(view.RIGHT_MARGIN-1, ar)
             }
+
             main.MODE = mode.INSERT
             main.update_tracker()
+
             ALOOP:
             main.MODE = mode.INSERT
             void, char = cbm.GETIN()
             if char == $00 {
               goto ALOOP
             }
+
             when char {
-              $1b -> {       ; <esc> throw into NAV mode from any other mode
+              $1b -> {       ; <esc>
                 toggle_nav()
                 main.save_line_buffer()
                 goto NAVCHARLOOP
               }
-              $0d -> {       ; <return> replicate <esc>, would like to also followed by an immediate 'o'
+              $0d -> {       ; <return> == esc + 'o'
                 toggle_nav()
                 main.save_line_buffer()
                 char = $6f ; 'o'
                 goto SKIP_NAVCHARLOOP
               }
               $14, $08, $7f -> {  ; backspace variants (DEL/BS)
-                goto INSERTMODE2
+                goto ABACKSPACE
               }
               else -> {
                 ; only accept printable ISO range
@@ -833,18 +834,35 @@ main {
                 if char == $22 {
                   cbm.CHROUT($80)
                 }
-                goto INSERTMODE2
+                goto AINSERTCHAR
               }
             }
             goto ALOOP
-            INSERTMODE2:
-            if view.c() < view.LEFT_MARGIN {       ; this is where to handle backspace past left margine
+
+            ABACKSPACE:
+            ; delete char to the left (vim-ish insert backspace)
+            if view.c() <= view.LEFT_MARGIN {
+              cursor.hide()
+              txt.plot(view.LEFT_MARGIN, view.r())
+              cursor.place(view.c(), view.r())
+              goto ALOOP
+            }
+            cursor.hide()
+            txt.plot(view.c()-1, view.r())
+            cursor.place(view.c(), view.r())
+            main.delete_xy_shift_left()
+            main.update_tracker()
+            goto ALOOP
+
+            AINSERTCHAR:
+            ; keep cursor within editable region
+            if view.c() < view.LEFT_MARGIN {
               cursor.hide()
               txt.plot(view.LEFT_MARGIN, view.r())
               cursor.place(view.c(),view.r())
               goto ALOOP
             }
-            if view.c() == view.RIGHT_MARGIN {   ; this is where to handle back
+            if view.c() == view.RIGHT_MARGIN {
               cursor.hide()
               txt.plot(view.RIGHT_MARGIN-1, view.r())
               cursor.place(view.c(),view.r())
@@ -856,30 +874,33 @@ main {
             goto ALOOP
           }
         }
-        'i' -> { ; edit mode (initially copy of replace writing mode)
+
+        'i' -> { ; insert at cursor (vim-like)
           if main.MODE == mode.NAV {
             main.MODE = mode.INSERT
             main.update_tracker()
+
             ILOOP:
             main.MODE = mode.INSERT
             void, char = cbm.GETIN()
             if char == $00 {
               goto ILOOP
             }
+
             when char {
-              $1b -> {       ; <esc> throw into NAV mode from any other mode
+              $1b -> {       ; <esc>
                 toggle_nav()
                 main.save_line_buffer()
                 goto NAVCHARLOOP
               }
-              $0d -> {       ; <return> replicate <esc>, would like to also followed by an immediate 'o'
+              $0d -> {       ; <return> == esc + 'o'
                 toggle_nav()
                 main.save_line_buffer()
                 char = $6f ; 'o'
                 goto SKIP_NAVCHARLOOP
               }
               $14, $08, $7f -> {  ; backspace variants (DEL/BS)
-                goto INSERTMODE
+                goto IBACKSPACE
               }
               else -> {
                 ; only accept printable ISO range
@@ -890,18 +911,35 @@ main {
                 if char == $22 {
                   cbm.CHROUT($80)
                 }
-                goto INSERTMODE
+                goto IINSERTCHAR
               }
             }
             goto ILOOP
-            INSERTMODE:
-            if view.c() < view.LEFT_MARGIN {       ; this is where to handle backspace past left margine
+
+            IBACKSPACE:
+            ; delete char to the left (vim-ish insert backspace)
+            if view.c() <= view.LEFT_MARGIN {
+              cursor.hide()
+              txt.plot(view.LEFT_MARGIN, view.r())
+              cursor.place(view.c(), view.r())
+              goto ILOOP
+            }
+            cursor.hide()
+            txt.plot(view.c()-1, view.r())
+            cursor.place(view.c(), view.r())
+            main.delete_xy_shift_left()
+            main.update_tracker()
+            goto ILOOP
+
+            IINSERTCHAR:
+            ; keep cursor within editable region
+            if view.c() < view.LEFT_MARGIN {
               cursor.hide()
               txt.plot(view.LEFT_MARGIN, view.r())
               cursor.place(view.c(),view.r())
               goto ILOOP
             }
-            if view.c() == view.RIGHT_MARGIN {   ; this is where to handle back
+            if view.c() == view.RIGHT_MARGIN {
               cursor.hide()
               txt.plot(view.RIGHT_MARGIN-1, view.r())
               cursor.place(view.c(),view.r())
@@ -913,58 +951,74 @@ main {
             goto ILOOP
           }
         }
-        'R' -> { ; edit mode (initially copy of replace writing mode)
+
+        'R' -> { ; replace mode
           if main.MODE == mode.NAV {
             main.MODE = mode.REPLACE
             main.update_tracker()
+
             RLOOP2:
             main.MODE = mode.REPLACE
             void, char = cbm.GETIN()
             if char == $00 {
               goto RLOOP2
             }
+
             when char {
-              $1b -> {       ; <esc> throw into NAV mode from any other mode
+              $1b -> {       ; <esc>
                 toggle_nav()
                 main.save_line_buffer()
                 goto NAVCHARLOOP
               }
-              $0d -> {       ; <return> replicate <esc>, would like to also followed by an immediate 'o'
+              $0d -> {       ; <return> == esc + 'o'
                 toggle_nav()
                 main.save_line_buffer()
                 char = $6f ; 'o'
                 goto SKIP_NAVCHARLOOP
               }
-              $14, $08, $7f -> {  ; backspace variants (DEL/BS)
-                goto REPLACEMODE
+              $14, $08, $7f -> {  ; backspace variants
+                goto RBACKSPACE
               }
               else -> {
                 ; only accept printable ISO range
                 if char < 32 or char > 126 {
                   goto RLOOP2
                 }
-                ; if it's a double-quote, clear quote mode first for compatibility
+                ; clear quote mode before emitting a quote
                 if char == $22 {
-                  cbm.CHROUT($80) ; disables "quote mode" in ROM
+                  cbm.CHROUT($80)
                 }
-                goto REPLACEMODE
+                goto RPUTCHAR
               }
             }
             goto RLOOP2
-            REPLACEMODE:
-            if view.c() < view.LEFT_MARGIN {       ; this is where to handle backspace past left margine
+
+            RBACKSPACE:
+            ; in replace mode, backspace should move left (don’t insert)
+            if view.c() <= view.LEFT_MARGIN {
+              cursor.hide()
+              txt.plot(view.LEFT_MARGIN, view.r())
+              cursor.place(view.c(), view.r())
+              goto RLOOP2
+            }
+            cursor.hide()
+            cursor.place(view.c()-1, view.r())
+            main.update_tracker()
+            goto RLOOP2
+
+            RPUTCHAR:
+            if view.c() < view.LEFT_MARGIN {
               cursor.hide()
               txt.plot(view.LEFT_MARGIN, view.r())
               cursor.place(view.c(),view.r())
               goto RLOOP2
             }
-            if view.c() == view.RIGHT_MARGIN {   ; this is where to handle back
+            if view.c() == view.RIGHT_MARGIN {
               cursor.hide()
               txt.plot(view.RIGHT_MARGIN-1, view.r())
               cursor.place(view.c(),view.r())
               goto RLOOP2
             }
-            ; only write printable bytes (and quote already handled above)
             cbm.CHROUT(char)
             cursor.place(view.c(),view.r())
             main.update_tracker()
