@@ -461,22 +461,40 @@ main {
     ubyte i
     ubyte ub
     void diskio.f_open_w_seek(filepath)
+
+    ; guard: empty document (prevents INDEX[0] crash)
+    if main.lineCount == 0 {
+      diskio.f_close_w()
+      flags.UNSAVED = false
+      info_noblock("          ")
+      return
+    }
+
     ^^Line line = view.INDEX[0]
-    str tmp = " " * MaxLength
-    void strings.copy(line.text, tmp)
-    strings.rstrip(tmp)
+
     do {
-      for i in 0 to strings.length(tmp)-1 {
-        ub = tmp[i]
-        if ub >= 32 and ub <= 126 {
-          void diskio.f_write(&ub, 1)
+      ; refresh tmp for EACH line (fixes "writes first line repeatedly")
+      str tmp = " " * (MaxLength + 1)
+      void strings.copy(line.text, tmp)
+      strings.rstrip(tmp)
+
+      ubyte L = strings.length(tmp)
+      if L > 0 {
+        for i in 0 to L-1 {
+          ub = tmp[i]
+          if ub >= 32 and ub <= 126 {
+            void diskio.f_write(&ub, 1)
+          }
         }
       }
+
       ;; trying to get the line endings correct (ChatGPT!)
       ub = $0a
       void diskio.f_write(&ub, 1) ; LF
+
       line = line.next
     } until line == 0
+
     diskio.f_close_w()
 
     flags.UNSAVED = false
