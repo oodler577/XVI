@@ -719,15 +719,23 @@ main {
                 goto NAVCHARLOOP
               }
               $0d -> {       ; <return> replicate <esc>, would like to also followed by an immediate 'o'
-                ; this part is the same as <esc>
                 toggle_nav()
                 main.save_line_buffer()
-                ; this part simulates the pressing of 'o'
                 char = $6f ; 'o'
-                ; this jumpts to right after NAVACHARLOOP: and reads char as if 'o' was pressed
                 goto SKIP_NAVCHARLOOP
               }
-              else -> { ; backspace
+              $14 -> {       ; <backspace> / DEL
+                goto INSERTMODE
+              }
+              else -> {
+                ; only accept printable ISO range
+                if char < 32 or char > 126 {
+                  goto ILOOP
+                }
+                ; if it's a double-quote, clear quote mode first for compatibility
+                if char == $22 {
+                  cbm.CHROUT($80)
+                }
                 goto INSERTMODE
               }
             }
@@ -1484,6 +1492,11 @@ main {
   }
 
   sub insert_char_shift_right(ubyte char) {
+    ; accept only printable ISO
+    if char < 32 or char > 126 {
+      return
+    }
+
     ubyte c = view.c()
     ubyte r = view.r()
 
