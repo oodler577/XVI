@@ -1,6 +1,6 @@
-============================================================
+------------------------------------------------------------
 XVI2 EDITOR — ASCII REGRESSION TEST PLAN
-============================================================
+------------------------------------------------------------
 
 This document is intended to be run VERBATIM as a manual test
 checklist. Do not skip steps. Record failures inline.
