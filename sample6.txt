@@ -1,11 +1,20 @@
 INIT
+                                                                            
+This is insert  .  INIT                                                     
+                                                                            
+INIT
+                                                                            
+ok just saved it so far so good!                                            
+                                                                            
+not saving but bazinga ..!!!                                                
+Have fun!                                                                   
 
 Sed in dui ut purus pretium facilisis nec at leo. Vivamus ultricies
 turpis ean tinciduneque ac maximus elementum, orci nisl condimentum
 neque Donec vulputate nisl euismod, molestie sem sit amet, facilisis sapien
 libero Vestibulum ac urna in lacus pretium vehicula et eu tortor. Phasellus
 ac Cras elementum mauris quis metus efficitur, eget auctor orci convallis
-Curabit xyz  rus eleifend lobortis id vel ante. Vivamus viverra
+THis is and again .... nd lobortis id vel ante. Vivamus viverra             
 Etiam varius est sit amet magna feugiat, vitae malesuada turpis facilisis
 Quisque suscipit enim a odio cursus, ac cursus nisl volutpat. Nam vel
 Integer vitae risus ac ligula tempus fermentum. Etiam sollicitudin varius
@@ -66,5 +75,6 @@ ignissim risus cursus nunc Nulla consequat enim sed velit suscipit mollis.
 auris et eros nec velit Sed sollicitudin diam eget felis euismod, id
 liquam odio eleifend non Morbi volutpat euismod elit, eget scelerisque
 ulla euismod ut. In ullamcorper Vestibulum mollis turpis nec ante luctus
+ooof  looking good                                                          
  
 FIN

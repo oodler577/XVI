@@ -7,8 +7,11 @@
 ; -- when it hits draw_screen() on new buffer)
 
 ; TODO:
+; - harden save_as against never stopping the save (infinite loop?)
+; - get rid of full screen redraw with "dd"
 
 ; BUGS
+; - reproduce issue with save_as never stopping
 ; - get crash and monitor prompt at the end of the document in some case;
 ; -- need to figure out how to reproduce it
 
