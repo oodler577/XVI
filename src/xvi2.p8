@@ -437,11 +437,11 @@ main {
     txt.plot(0,view.TOP_LINE)
     repeat 20 {
       txt.plot(0, txt.get_row())
-      say("~")
+      say("~    ")
     }
     say("~                             XVI - Commander X16 Vi               ")
     say("~                                                                  ")
-    say("~                             version 2.0 pre-ALPHA (Build 793d7a) ")
+    say("~                             version 2.0 pre-ALPHA                ")
     say("~                                                                  ")
     say("~                             by Brett Estrade et al.              ")
     say("~                                                                  ")
@@ -454,10 +454,11 @@ main {
     say("~                  type  <esc>i to open new buffer in Insert  mode ")
     say("~                  type  :e filepath<Enter>    to load file to edit")
     say("~                  type  :q<Enter>             to exit             ")
-    repeat 24 {
+    repeat 20 {
       txt.plot(0, txt.get_row())
-      say("~")
+      say("~    ")
     }
+    say("~                                                               build 30719eff")
   }
 
   sub save_current_file() {
