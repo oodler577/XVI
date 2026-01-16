@@ -858,12 +858,10 @@ main {
             ABACKSPACE:
             ; delete char to the left (vim-ish insert backspace)
             if view.c() <= view.LEFT_MARGIN {
-              cursor.hide()
               txt.plot(view.LEFT_MARGIN, view.r())
               cursor.place(view.c(), view.r())
               goto ALOOP
             }
-            cursor.hide()
             txt.plot(view.c()-1, view.r())
             cursor.place(view.c(), view.r())
             main.delete_xy_shift_left()
@@ -873,15 +871,15 @@ main {
             AINSERTCHAR:
             ; keep cursor within editable region
             if view.c() < view.LEFT_MARGIN {
-              cursor.hide()
               txt.plot(view.LEFT_MARGIN, view.r())
               cursor.place(view.c(),view.r())
+              main.update_tracker()
               goto ALOOP
             }
             if view.c() == view.RIGHT_MARGIN {
-              cursor.hide()
               txt.plot(view.RIGHT_MARGIN-1, view.r())
               cursor.place(view.c(),view.r())
+              main.update_tracker()
               goto ALOOP
             }
             main.insert_char_shift_right(char)
@@ -948,15 +946,15 @@ main {
             IINSERTCHAR:
             ; keep cursor within editable region
             if view.c() < view.LEFT_MARGIN {
-              cursor.hide()
               txt.plot(view.LEFT_MARGIN, view.r())
               cursor.place(view.c(),view.r())
+              main.update_tracker()
               goto ILOOP
             }
             if view.c() == view.RIGHT_MARGIN {
-              cursor.hide()
               txt.plot(view.RIGHT_MARGIN-1, view.r())
               cursor.place(view.c(),view.r())
+              main.update_tracker()
               goto ILOOP
             }
             main.insert_char_shift_right(char)
