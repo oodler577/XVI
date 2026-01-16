@@ -1,31 +1,38 @@
 ; DOING: <- start here!!
+; - regression testing
 ; - making initial start up option/buffer presentation as close to vim as possible
 ; - (PRIORITY) insert mode  <esc>i (most commonly used writing mode)
 ; -- build on current functionality of 'i' which is to shift right and insert space
-; -- also add 'a', which is going to append to the right of the current x,y
 ; - add fast "scroll_down" on in 'R' and hit 'enter' (currently way to slow
 ; -- when it hits draw_screen() on new buffer)
 
 ; TODO:
-; - use 'R' mode over and over again - record and triage bugs
-; - fast "save_line_buffer"
 
 ; BUGS
 ; - get crash and monitor prompt at the end of the document in some case;
 ; -- need to figure out how to reproduce it
-; - ^,$  (jump to line start, line end) both do not properly replace the letter under the cursor
 
 ; STRETCH TODO:
 ; - :set number / :set nonumber (turns line numbers on/off)
 ; - wq! - force save, force save and quit
 ; - allow many more lines (convert Line to use str instead permanent line)
-; - do not write contiguous spaces (fully blank linkes, trim when writing)
+; - do not write contiguous spaces (fully blank line, trim when writing)
+; -- this might be an optimization that is needed when we increase line
+; -- support > 140
+; 
 ; - stack based "undo" (p/P, o/O, dd)
+; - fast "save_line_buffer"
 
 ; PARTIALLY DONE:
 ; - implement flag-based "do stuff" idea for alerts (from Tony)
 
 ; DONE:
+; - ^,$  (jump to line start, line end) both do not properly replace the letter under the cursor
+; -- got fixed somehow, but it works now
+; - use 'R' mode over and over again - record and triage bugs
+; -- fixed backspace issue, got it indistinguishable (right now) to how it works
+; -- in vim
+; - also add 'a', which is going to append to the right of the current x,y
 ; - made cursor be placed more like vim does it, based on line ending and the
 ; -- current "default_col"
 ; - (BUG) when in 'R' mode, entering in double quotes (") breaks replace mode
@@ -779,7 +786,7 @@ main {
             main.replace_char(char)
           }
         }
-        'x' -> {
+        'x', $7f -> {  ; delete char, shift left - 'x' and $7 (backspace in NAV mode)
           if main.MODE == mode.NAV {
             main.delete_xy_shift_left()
           }
@@ -928,12 +935,10 @@ main {
             IBACKSPACE:
             ; delete char to the left (vim-ish insert backspace)
             if view.c() <= view.LEFT_MARGIN {
-              cursor.hide()
               txt.plot(view.LEFT_MARGIN, view.r())
               cursor.place(view.c(), view.r())
               goto ILOOP
             }
-            cursor.hide()
             txt.plot(view.c()-1, view.r())
             cursor.place(view.c(), view.r())
             main.delete_xy_shift_left()
@@ -985,8 +990,11 @@ main {
                 char = $6f ; 'o'
                 goto SKIP_NAVCHARLOOP
               }
-              $14, $08, $7f -> {  ; backspace variants
-                goto RBACKSPACE
+              $7f -> {                   ; <Delete> ($7f) in REPLACE mode acts like 'x' in NAV mode
+                main.delete_xy_shift_left()
+              }
+              $9d, $14, $08 -> {         ; left arrow, backspace variants act like 'h' in NAV mode
+                cursor_left_on_h()
               }
               else -> {
                 ; only accept printable ISO range
@@ -1002,33 +1010,22 @@ main {
             }
             goto RLOOP2
 
-            RBACKSPACE:
-            ; in replace mode, backspace should move left (don’t insert)
-            if view.c() <= view.LEFT_MARGIN {
-              cursor.hide()
-              txt.plot(view.LEFT_MARGIN, view.r())
-              cursor.place(view.c(), view.r())
-              goto RLOOP2
-            }
-            cursor.hide()
-            cursor.place(view.c()-1, view.r())
-            main.update_tracker()
-            goto RLOOP2
-
             RPUTCHAR:
             if view.c() < view.LEFT_MARGIN {
-              cursor.hide()
               txt.plot(view.LEFT_MARGIN, view.r())
               cursor.place(view.c(),view.r())
+              main.update_tracker()
               goto RLOOP2
             }
-            if view.c() == view.RIGHT_MARGIN {
-              cursor.hide()
+            else if view.c() == view.RIGHT_MARGIN {
               txt.plot(view.RIGHT_MARGIN-1, view.r())
               cursor.place(view.c(),view.r())
+              main.update_tracker()
               goto RLOOP2
             }
+            cursor.saved_char = txt.getchr(view.c()+1,view.r())
             cbm.CHROUT(char)
+            txt.plot(view.c(),view.r())
             cursor.place(view.c(),view.r())
             main.update_tracker()
             goto RLOOP2
@@ -1076,7 +1073,7 @@ main {
             cursor_down_on_j()
           }
         }
-        'h',$9d -> {       ; LEFT
+        'h', $9d, $14, $08 -> {     ; LEFT, h, left arrow, backspace variants (<Delete> acts like 'x')
           if main.MODE == mode.NAV {
             cursor_left_on_h()
           }
