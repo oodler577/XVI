@@ -963,7 +963,6 @@ main {
             goto ILOOP
           }
         }
-
         'R' -> { ; replace mode
           if main.MODE == mode.NAV {
             main.MODE = mode.REPLACE
