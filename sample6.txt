@@ -1,7 +1,7 @@
 INIT
 
-Duis ac Sed in dui ut purus pretium facilisis nec at leo. Vivamus ultricies
-turpis ean tincidunt, neque ac maximus elementum, orci nisl condimentum
+Sed in dui ut purus pretium facilisis nec at leo. Vivamus ultricies
+turpis ean tinciduneque ac maximus elementum, orci nisl condimentum
 neque Donec vulputate nisl euismod, molestie sem sit amet, facilisis sapien
 libero Vestibulum ac urna in lacus pretium vehicula et eu tortor. Phasellus
 ac Cras elementum mauris quis metus efficitur, eget auctor orci convallis
@@ -20,7 +20,7 @@ nulla euismod ut. In ullamcorper Vestibulum mollis turpis nec ante luctus
 Nulla id leo vitae erat aliquam facilisis. Quisque euismod nulla ac lorem
 Suspendisse potenti. Pellentesque bibendum nisl nec nisl vehicula, et
 tristique Cras euismod lectus eget turpis sollicitudin, non malesuada
-jkjkjkjj                                                                    
+jkjkjkjj
 libero viverra Nullam ut ipsum in ante facilisis tempor vel ac ipsum. Sed
 sodales lorem Duis ac elit sed ante egestas gravida. Nulla quis risus vitae
 sem sagittis Curabitur fermentum turpis vitae ante pretium, et pretium leo
@@ -60,11 +60,11 @@ dapibus justo ac turpis Donec sed dui vel lorem pharetra sodales. Morbi
 convallis felis et lacus Pellentesque ac sollicitudin eros. Ut sollicitudin
 dolor a ligula dignissim Cras varius quam id risus interdum, et pharetra
 augue dictum. Vivamus vitae Sed egestas urna et fringilla convallis. Etiam
-convallis turpis in urna Aenean viverra, velit ac malesuada interdum, purus
-urna malesuada metus Curabitur pharetra dui vitae orci feugiat, ac
-dignissim risus cursus nunc Nulla consequat enim sed velit suscipit mollis.
-Mauris et eros nec velit Sed sollicitudin diam eget felis euismod, id
-aliquam odio eleifend non Morbi volutpat euismod elit, eget scelerisque
-nulla euismod ut. In ullamcorper Vestibulum mollis turpis nec ante luctus
+onvallis turpis in urna Aenean viverra, velit ac malesuada interdum, purus
+rna malesuada metus Curabitur pharetra dui vitae orci feugiat, ac
+ignissim risus cursus nunc Nulla consequat enim sed velit suscipit mollis.
+auris et eros nec velit Sed sollicitudin diam eget felis euismod, id
+liquam odio eleifend non Morbi volutpat euismod elit, eget scelerisque
+ulla euismod ut. In ullamcorper Vestibulum mollis turpis nec ante luctus
  
-FIN
+IN

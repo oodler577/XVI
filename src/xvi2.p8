@@ -1888,6 +1888,7 @@ main {
     default_col = view.c()
     cursor.replace(c,r)
 
+    flags.UNSAVED = true
     main.update_tracker()
   }
 
@@ -1908,25 +1909,33 @@ main {
   }
 
   ; util functions
-
   sub update_tracker () {
     ubyte X = view.c()
     ubyte Y = view.r()
-    txt.plot(0, view.FOOTER_LINE)
-    prints(view.BLANK_LINE79)
+  
+    ; Always draw tracker on the footer line only
+    txt.plot(2, view.FOOTER_LINE)
+    prints(view.BLANK_LINE76)
+  
+    ; Use a known color scheme for footer baseline (optional)
+    ; If you don't want this, remove these two lines.
+    txt.color2($1,$6)   ; white on blue (example), match your normal scheme
+  
     txt.plot(1, view.FOOTER_LINE)
     printw(main.lineCount)
     prints(" lines, x: ")
     printw(X - view.LEFT_MARGIN + 1)
     prints(", y: ")
-    printw(Y - view.TOP_LINE    + 1)
+    printw(Y - view.TOP_LINE + 1)
     prints(" TOP: ")
     printw(view.CURR_TOP_LINE)
     prints(" BOT: ")
-    printw(view.CURR_TOP_LINE+view.HEIGHT-1)
+    printw(view.CURR_TOP_LINE + view.HEIGHT - 1)
     prints(" CNT: ")
     printw(main.NAVCHARCOUNT)
-    txt.plot(79-9, view.r())
+  
+    ; Status badge MUST be on footer line (bugfix)
+    txt.plot(79-9, view.FOOTER_LINE)
     if flags.UNSAVED == true {
       txt.color2($6,$1)
       prints("(UNSAVED)")
@@ -1935,11 +1944,12 @@ main {
     else if main.MODE > mode.INIT {
       prints("( SAVED )")
     }
-    ; update mode (upper left)
+  
+    ; Mode indicator (upper left) — keep as you had it
     if main.MODE == mode.REPLACE {
       info_noblock_LEFT("-- REPLACE --")
     }
-    else if main.MODE == mode.INSERT {   ; (i)nsert is not implemented yet
+    else if main.MODE == mode.INSERT {
       info_noblock_LEFT("-- INSERT  --")
     }
     else if main.MODE == mode.NAV {
@@ -1948,7 +1958,9 @@ main {
     else {
       info_noblock_LEFT("             ")
     }
-    txt.plot(X,Y)
+  
+    ; Restore cursor position
+    txt.plot(X, Y)
   }
 
   sub prints (str x) {
