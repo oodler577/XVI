@@ -441,7 +441,7 @@ main {
     }
     say("~                             XVI - Commander X16 Vi               ")
     say("~                                                                  ")
-    say("~                             version 2.0 pre-ALPHA                ")
+    say("~                             version 2.0 pre-ALPHA (Build 793d7a) ")
     say("~                                                                  ")
     say("~                             by Brett Estrade et al.              ")
     say("~                                                                  ")
