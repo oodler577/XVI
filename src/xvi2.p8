@@ -846,10 +846,11 @@ main {
                 if char < 32 or char > 126 {
                   goto ALOOP
                 }
-                ; if it's a double-quote, clear quote mode first for compatibility
-                if char == $22 {
-                  cbm.CHROUT($80)
-                }
+        ; not sure why this is not needed .. 
+        ; .... ; if it's a double-quote, clear quote mode first for compatibility
+        ;        if char == $22 {
+        ;          cbm.CHROUT($80)
+        ;        }
                 goto AINSERTCHAR
               }
             }
@@ -922,9 +923,11 @@ main {
                   goto ILOOP
                 }
                 ; if it's a double-quote, clear quote mode first for compatibility
-                if char == $22 {
-                  cbm.CHROUT($80)
-                }
+        ; not sure why this is not needed .. 
+        ; .... ; if it's a double-quote, clear quote mode first for compatibility
+        ;        if char == $22 {
+        ;          cbm.CHROUT($80)
+        ;        }
                 goto IINSERTCHAR
               }
             }
