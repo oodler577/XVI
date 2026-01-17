@@ -1,8 +1,7 @@
 ; FEEDBACK:
-; - Sam    : add A, I, i, G, 1G, R, r, yy, dd, x, ZZ, :q!, :/
-; - Gillham: add 0, D, dG,  DONE: Y
-; - P is buggy, "pastes the line in minus the whitespace at the start"
-; - g leaves reverse character
+; - Sam    : add A, I, 1G, ZZ, :q!, (Done: i, G, x, dd, yy, R, r) (Later: :/)
+; - Gillham: add D, dG,  (Done: 0, Y)
+; - p,P are buggy, "pastes the line in minus the whitespace at the start"
 
 ; TODO:
 ; - get rid of full screen redraw with "dd"
@@ -35,6 +34,7 @@
 ; - implement flag-based "do stuff" idea for alerts (from Tony)
 
 ; DONE:
+; - g leaves reverse character
 ; - O bug when on line 1
 ; - on clean exit, turn ISO
 ; - added Y
@@ -1038,7 +1038,7 @@ main {
         }
 
         ; N A V I G A T I O N
-        '^' -> { ; jump to start of line
+        '^','0' -> { ; jump to start of line
           if main.MODE == mode.NAV {
             jump_to_left()
           }
@@ -1633,8 +1633,7 @@ main {
         view.CURR_TOP_LINE = 1
         draw_screen()
       }
-      txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
-      cursor.replace(view.c(), view.r())
+      cursor.place(view.LEFT_MARGIN, view.TOP_LINE)
       main.update_tracker()
   }
 
