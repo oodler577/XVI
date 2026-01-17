@@ -2,7 +2,6 @@
 ; - Sam    : add A, I, i, G, 1G, R, r, yy, dd, x, ZZ, :q!, :/
 ; - Gillham: add 0, D, dG,  DONE: Y
 ; - P is buggy, "pastes the line in minus the whitespace at the start"
-; - O bug when on line 1
 ; - g leaves reverse character
 
 ; TODO:
@@ -36,7 +35,10 @@
 ; - implement flag-based "do stuff" idea for alerts (from Tony)
 
 ; DONE:
-;- added Y
+; - O bug when on line 1
+; - on clean exit, turn ISO
+; - added Y
+; - delete swap file after saving
 
 %zeropage basicsafe
 %option no_sysinit
@@ -464,6 +466,7 @@ main {
      }
      diskio.rename(doc.filepath, oldback)
      save_as(doc.filepath)
+     diskio.delete(oldback)
   }
   
   ; Safe save: never dereference line when it becomes 0
@@ -667,6 +670,7 @@ main {
                 }
                 else {
                   txt.clear_screenchars($20) 
+                  txt.iso_off()
                   sys.exit(0)
                 }
               }
@@ -1233,12 +1237,7 @@ main {
     ;info("O ...")
     flags.UNSAVED = true
 
-    if r == view.TOP_LINE {
-      draw_screen()
-      txt.plot(view.LEFT_MARGIN,r)
-      cursor.replace(view.LEFT_MARGIN,r)
-    }
-    else if r == view.BOTTOM_LINE {
+    if r == view.BOTTOM_LINE {
       draw_screen()
       txt.plot(view.LEFT_MARGIN,r)
       cursor.replace(view.LEFT_MARGIN,r)

@@ -19,9 +19,6 @@ $(XVI2_PP): $(XVI2_SRC)
 # --- targets ---
 all: build run
 
-build:
-	$(PROG8C) -target $(TARGET) src/xvi.p8
-
 bundle:
 	rm -rfv ./$(PKG)
 	mkdir ./$(PKG)
