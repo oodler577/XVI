@@ -1,4 +1,8 @@
-; DOING: <- start here!!
+; TODO:
+; - get rid of full screen redraw with "dd"
+; - disallow ":e" (new buffer) if another buffer is already active
+
+; **DOING** : <- start here!!
 ; - add fast "scroll_down" on in 'R' and hit 'enter' (currently way to slow
 ; -- when it hits draw_screen() on new buffer)
 ; - making initial start up option/buffer presentation as close to vim as possible
@@ -6,13 +10,7 @@
 ; ONGOING:
 ; - regression testing
 
-; TODO:
-; - harden save_as against never stopping the save (infinite loop?)
-; - get rid of full screen redraw with "dd"
-; - disallow ":e" (new buffer) if another buffer is already active
-
 ; BUGS:
-; - <esc>+O leaves a cursor artifact
 ; - get crash and monitor prompt at the end of the document in some case;
 ; -- need to figure out how to reproduce it (haven't gotten it in a while)
 
@@ -31,6 +29,8 @@
 ; - implement flag-based "do stuff" idea for alerts (from Tony)
 
 ; DONE:
+; - harden save_as against never stopping the save (infinite loop?)
+; - <esc>+O leaves a cursor artifact
 ; - reproduce issue with save_as never stopping
 ; - (PRIORITY) insert mode  <esc>i (most commonly used writing mode)
 ; -- build on current functionality of 'i' which is to shift right and insert space
@@ -465,7 +465,7 @@ main {
       txt.plot(0, txt.get_row())
       say("~    ")
     }
-    say("~                                                               build 30719eff")
+    say("~                                                               build b19e1a1")
   }
 
   sub save_current_file() {
