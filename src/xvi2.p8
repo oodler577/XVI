@@ -1,7 +1,9 @@
 ; FEEDBACK:
-; - Sam: A, I, i, G, 1G, R, r, yy, dd, x, ZZ, :q!, :/  
-; - Gillham: add 0, D, dG, Y
+; - Sam    : add A, I, i, G, 1G, R, r, yy, dd, x, ZZ, :q!, :/
+; - Gillham: add 0, D, dG,  DONE: Y
 ; - P is buggy, "pastes the line in minus the whitespace at the start"
+; - O bug when on line 1
+; - g leaves reverse character
 
 ; TODO:
 ; - get rid of full screen redraw with "dd"
@@ -34,6 +36,7 @@
 ; - implement flag-based "do stuff" idea for alerts (from Tony)
 
 ; DONE:
+; - added Y
 ; - harden save_as against never stopping the save (infinite loop?)
 ; - <esc>+O leaves a cursor artifact
 ; - reproduce issue with save_as never stopping
