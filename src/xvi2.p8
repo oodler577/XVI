@@ -446,7 +446,7 @@ main {
       txt.plot(0, txt.get_row())
       say("~    ")
     }
-    say("~                                                               build b19e1a1")
+    say("~                                                             build 49567eb")
   }
 
   sub save_current_file() {
