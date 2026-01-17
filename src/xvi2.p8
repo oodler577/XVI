@@ -1116,54 +1116,57 @@ main {
   }
 
   sub paste_line_above() {
-    if view.CLIPBOARD == 0 { ; indicates empty clipboard (nothing copied yet)
+    if view.CLIPBOARD == 0 {
       warn("Clipboard is empty ..")
       return
     }
-
+  
     ubyte r = view.r()
-
-    uword curr_line = main.get_line_num(r) ; next_line is +1
-
-    ^^Line curr_addr = get_Line_addr(r)    ; gets memory addr of current Line
-    ^^Line old_prev  = curr_addr.prev
+    uword curr_line = main.get_line_num(r)
+  
+    ^^Line curr_addr = get_Line_addr(r)
+    ^^Line old_prev  = 0
     ^^Line copy_addr = view.CLIPBOARD
-    ^^Line new_prev  = main.allocNewLine(copy_addr.text) ; new line with text from copied address
-
-    old_prev.next  = new_prev
-    new_prev.next  = curr_addr
+    ^^Line new_prev  = main.allocNewLine(copy_addr.text)
+  
+    if curr_line > 1 {
+      old_prev = view.INDEX[(curr_line as ubyte) - 2]
+    }
+  
+    new_prev.prev = old_prev
+    new_prev.next = curr_addr
+  
     curr_addr.prev = new_prev
-    new_prev.prev  = old_prev
-
-    ;; call to update INDEX
-    main.lineCount = view.insert_line_before(new_prev, main.get_line_num(r), main.lineCount)
-
-    ; need to assert new address got inserted into view.INDEX
+  
+    if old_prev != 0 {
+      old_prev.next = new_prev
+    }
+  
+    main.lineCount = view.insert_line_before(new_prev, curr_line, main.lineCount)
+  
     void debug.assert(view.INDEX[curr_line as ubyte - 1], new_prev, debug.EQ, "INDEX[curr_line as ubyte - 1] == new_prev")
     void debug.assert(view.INDEX[curr_line as ubyte], curr_addr, debug.EQ, "INDEX[curr_line as ubyte] == curr_addr")
-
-    ;info("P ...")
+  
     flags.UNSAVED = true
-
+  
     if r == view.TOP_LINE {
       draw_screen()
-      txt.plot(view.LEFT_MARGIN,r)
-      cursor.replace(view.LEFT_MARGIN,r)
+      txt.plot(view.LEFT_MARGIN, r)
+      cursor.replace(view.LEFT_MARGIN, r)
     }
     else if r == view.BOTTOM_LINE {
       draw_screen()
-      txt.plot(view.LEFT_MARGIN,r)
-      cursor.replace(view.LEFT_MARGIN,r)
+      txt.plot(view.LEFT_MARGIN, r)
+      cursor.replace(view.LEFT_MARGIN, r)
     }
     else {
       draw_screen()
-      txt.plot(view.LEFT_MARGIN,r)
-      cursor.replace(view.LEFT_MARGIN,r)
+      txt.plot(view.LEFT_MARGIN, r)
+      cursor.replace(view.LEFT_MARGIN, r)
     }
-
+  
     main.update_tracker()
   }
-
 
   sub paste_line_below() {
     if view.CLIPBOARD == 0 { ; indicates empty clipboard (nothing copied yet)
