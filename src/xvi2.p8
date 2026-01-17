@@ -1,19 +1,20 @@
 ; DOING: <- start here!!
-; - regression testing
-; - making initial start up option/buffer presentation as close to vim as possible
-; - (PRIORITY) insert mode  <esc>i (most commonly used writing mode)
-; -- build on current functionality of 'i' which is to shift right and insert space
 ; - add fast "scroll_down" on in 'R' and hit 'enter' (currently way to slow
 ; -- when it hits draw_screen() on new buffer)
+; - making initial start up option/buffer presentation as close to vim as possible
+
+; ONGOING:
+; - regression testing
 
 ; TODO:
 ; - harden save_as against never stopping the save (infinite loop?)
 ; - get rid of full screen redraw with "dd"
+; - disallow ":e" (new buffer) if another buffer is already active
 
-; BUGS
-; - reproduce issue with save_as never stopping
+; BUGS:
+; - <esc>+O leaves a cursor artifact
 ; - get crash and monitor prompt at the end of the document in some case;
-; -- need to figure out how to reproduce it
+; -- need to figure out how to reproduce it (haven't gotten it in a while)
 
 ; STRETCH TODO:
 ; - :set number / :set nonumber (turns line numbers on/off)
@@ -30,6 +31,9 @@
 ; - implement flag-based "do stuff" idea for alerts (from Tony)
 
 ; DONE:
+; - reproduce issue with save_as never stopping
+; - (PRIORITY) insert mode  <esc>i (most commonly used writing mode)
+; -- build on current functionality of 'i' which is to shift right and insert space
 ; - ^,$  (jump to line start, line end) both do not properly replace the letter under the cursor
 ; -- got fixed somehow, but it works now
 ; - use 'R' mode over and over again - record and triage bugs
@@ -483,11 +487,14 @@ main {
      save_as(doc.filepath)
   }
   
+  ; Safe save: never dereference line when it becomes 0
   sub save_as(str filepath) {
     info_noblock("saving ...")
   
     ubyte i
     ubyte ub
+    ubyte maxLen = main.MaxLength
+  
     void diskio.f_open_w_seek(filepath)
   
     if main.lineCount == 0 {
@@ -497,13 +504,18 @@ main {
       return
     }
   
+    str writeBuffer = " " * maxLen
     ^^Line line = view.INDEX[0]
   
-    do {
+    while line != 0 {
+      ; prepare this line
+      void strings.copy(line.text, writeBuffer)
+      void strings.rstrip(writeBuffer)
+  
       ; write only printable ISO bytes from the fixed-width line buffer
-      for i in 0 to MaxLength-1 {
-        ub = @(line.text + i)
-        if ub == 0 {
+      for i in 0 to maxLen-1 {
+        ub = writeBuffer[i]
+        if ub == 0 {        ; stop at terminator
           break
         }
         if ub >= 32 and ub <= 126 {
@@ -511,11 +523,13 @@ main {
         }
       }
   
+      ; newline (LF)
       ub = $0a
       void diskio.f_write(&ub, 1)
   
+      ; advance
       line = line.next
-    } until line == 0
+    }
   
     diskio.f_close_w()
   
@@ -1248,12 +1262,27 @@ main {
     }
     else {
       txt.scrolldown_nlast(r, view.LEFT_MARGIN) ; 2nd param is column offset to start
+
       txt.plot(view.LEFT_MARGIN,r)
       prints(view.BLANK_LINE76)
+
       txt.plot(0,view.BOTTOM_LINE+1)
       prints(view.BLANK_LINE79)
+
+      ; handle lines as they shift down if adding lines mid screen on a
+      ; short document
+      if main.lineCount <= view.HEIGHT and r != (main.lineCount+view.TOP_LINE) {
+         ; prog8 will short circut here if the first condition is false, so it
+         ; avoids lineCount (uword) overflowing "as ubyte"
+         txt.plot(view.LEFT_MARGIN, (main.lineCount as ubyte)+view.TOP_LINE-1)
+         main.printLineNum(main.lineCount)
+      }
+
+      txt.plot(view.c(),r+1)
+      cursor.restore_current_char()
+      cursor.saved_char = $20
+
       txt.plot(view.LEFT_MARGIN,r)
-      cursor.hide()
       cursor.place(view.LEFT_MARGIN,r)
     }
 
@@ -1292,10 +1321,22 @@ main {
     }
     else {
       txt.scrolldown_nlast(r+1, view.LEFT_MARGIN)
+
       txt.plot(view.LEFT_MARGIN,r+1)
       prints(view.BLANK_LINE76)
+
       txt.plot(0,view.BOTTOM_LINE+1)
       prints(view.BLANK_LINE79)
+
+      ; handle lines as they shift down if adding lines mid screen on a
+      ; short document
+      if main.lineCount <= view.HEIGHT and r != (main.lineCount+view.TOP_LINE) {
+         ; prog8 will short circut here if the first condition is false, so it
+         ; avoids lineCount (uword) overflowing "as ubyte"
+         txt.plot(view.LEFT_MARGIN, (main.lineCount as ubyte)+view.TOP_LINE-1)
+         main.printLineNum(main.lineCount)
+      }
+
       txt.plot(view.LEFT_MARGIN,r+1)
       cursor.place(view.LEFT_MARGIN,r+1)
     }
@@ -1306,10 +1347,10 @@ main {
   }
 
   sub do_yy() {
+    info("yank")
+
     ubyte c = view.c()
     ubyte r = view.r()
-
-    ;info("yy")
 
     ^^Line curr_addr = get_Line_addr(r) ; line being deleted
 
@@ -1320,14 +1361,13 @@ main {
   }
 
   sub do_dd() {
+    info("cut")
+
     ubyte c = view.c()
     ubyte r = view.r()
 
-    info_noblock("dd ...")
-
     ; safety: if no lines, nothing to do
     if main.lineCount == 0 {
-      info_noblock("      ")
       cursor.replace(c, r)
       main.update_tracker()
       return
@@ -1347,12 +1387,10 @@ main {
       void redraw_line(only_addr, r)
 
       flags.UNSAVED = true
-      info_noblock("      ")
 
       txt.plot(view.LEFT_MARGIN, r)
       cursor.replace(view.LEFT_MARGIN, r)
       main.update_tracker()
-      return
     }
 
     ^^Line curr_addr = get_Line_addr(r) ; line being deleted
@@ -1380,8 +1418,6 @@ main {
     view.CLIPBOARD   = curr_addr ; save deleted address to clipboard for later pasting
 
     flags.UNSAVED = true
-
-    info_noblock("      ")
 
     ; If we deleted the last document line, move cursor up one screen row (if possible)
     if deleted_line > main.lineCount {
@@ -1444,7 +1480,7 @@ main {
   }
 
   sub draw_screen () {               ; NOTE: assumes view.CURR_TOP_LINE is correct
-      info_noblock("redrawing ...")
+      info_noblock("             ")
       ubyte idx = (view.CURR_TOP_LINE as ubyte) - 1
       ^^Line line = view.INDEX[idx]
       ubyte r
@@ -1486,7 +1522,6 @@ main {
         prints("~   ")
         txt.plot(0,r+1)
       }
-
       info_noblock("             ")
   }
 
@@ -2010,6 +2045,10 @@ main {
     txt.color2(color1, color2)
     prints(message)
     txt.color2($1, $6) ; sets text back to default, white on blue
+  }
+
+  sub info(str message) {
+    alert(message, 15, $6, $1)
   }
 
   sub warn(str message) {
