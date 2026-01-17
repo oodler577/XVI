@@ -1,3 +1,8 @@
+; FEEDBACK:
+; - Sam: A, I, i, G, 1G, R, r, yy, dd, x, ZZ, :q!, :/  
+; - Gillham: add 0, D, dG, Y
+; - P is buggy, "pastes the line in minus the whitespace at the start"
+
 ; TODO:
 ; - get rid of full screen redraw with "dd"
 ; - disallow ":e" (new buffer) if another buffer is already active
@@ -753,6 +758,10 @@ main {
             goto RLOOP2 ; REPLACE mode, start editing blank line immediately
           }
         }
+        'Y' -> {
+          main.do_yy()
+          goto NAVCHARLOOP
+        }
         'y' -> {
           if main.MODE == mode.NAV {
             YYLOOP:
@@ -1361,6 +1370,13 @@ main {
   }
 
   sub do_dd() {
+    if main.lineCount < 2 {
+      txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
+      prints(view.BLANK_LINE76)
+      txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
+      return
+    }
+
     info("cut")
 
     ubyte c = view.c()
