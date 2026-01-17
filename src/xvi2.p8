@@ -36,36 +36,7 @@
 ; - implement flag-based "do stuff" idea for alerts (from Tony)
 
 ; DONE:
-; - added Y
-; - harden save_as against never stopping the save (infinite loop?)
-; - <esc>+O leaves a cursor artifact
-; - reproduce issue with save_as never stopping
-; - (PRIORITY) insert mode  <esc>i (most commonly used writing mode)
-; -- build on current functionality of 'i' which is to shift right and insert space
-; - ^,$  (jump to line start, line end) both do not properly replace the letter under the cursor
-; -- got fixed somehow, but it works now
-; - use 'R' mode over and over again - record and triage bugs
-; -- fixed backspace issue, got it indistinguishable (right now) to how it works
-; -- in vim
-; - also add 'a', which is going to append to the right of the current x,y
-; - made cursor be placed more like vim does it, based on line ending and the
-; -- current "default_col"
-; - (BUG) when in 'R' mode, entering in double quotes (") breaks replace mode
-; -- due to "quotes mode", solution is to cbm.CHROUT($80) first if char == $22 (quote)
-; -- then cbm.CHROUT($22) ...
-; - saving now detects last visible character, and adds new line in the file there
-; - 'i' now inserts a space and shifts right
-; - add mode status, e.g., "-- REPLACE --" / "-- INSERT --" when in the correct modes
-; - ALERTs need to be non-blocking (probably need to use interrupts?)
-; - "shift left" for 'x'
-; - o/O need an efficient redraw routine for section affected by shift-down
-; see CHANGELOG for full archive of items
-; - trying to get <return> when in REPLACE mode working, see BUGS
-;   - can't get <return> to do the right thing when in REPLACE mode; i.e.,
-;   -- I want it to save the current line, do the equivalent of 'o' (insert
-;   -- line after), and return back to edit mode (replace or insert, whatever
-;   -- it was)
-; - :e on splash to start new document buffer (PRIORITY)
+;- added Y
 
 %zeropage basicsafe
 %option no_sysinit
