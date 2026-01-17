@@ -1215,59 +1215,51 @@ main {
 
   sub insert_line_above() {
     ubyte r = view.r()
-
-    uword curr_line = main.get_line_num(r) ; next_line is +1
-
-    ^^Line curr_addr = get_Line_addr(r)        ; gets memory addr of current Line
-    ^^Line old_prev  = curr_addr.prev
-    ^^Line new_prev  = main.allocNewLine("  ") ; creates new Line instance to insert
-
-    old_prev.next  = new_prev
-    new_prev.next  = curr_addr
+  
+    uword curr_line = main.get_line_num(r)
+  
+    ^^Line curr_addr = get_Line_addr(r)
+    ^^Line old_prev  = 0
+    ^^Line new_prev  = main.allocNewLine("  ")
+  
+    if curr_line > 1 {
+      old_prev = view.INDEX[(curr_line as ubyte) - 2]
+    }
+  
+    new_prev.prev = old_prev
+    new_prev.next = curr_addr
+  
     curr_addr.prev = new_prev
-    new_prev.prev  = old_prev
-
-    ;; call to update INDEX
-    main.lineCount = view.insert_line_before(new_prev, main.get_line_num(r), main.lineCount)
-
-    ; need to assert new address got inserted into view.INDEX
-    void debug.assert(view.INDEX[curr_line as ubyte - 1], new_prev, debug.EQ, "INDEX[curr_line as ubyte - 1] == new_prev")
-    void debug.assert(view.INDEX[curr_line as ubyte], curr_addr, debug.EQ, "INDEX[curr_line as ubyte] == curr_addr")
-
-    ;info("O ...")
+  
+    if old_prev != 0 {
+      old_prev.next = new_prev
+    }
+  
+    main.lineCount = view.insert_line_before(new_prev, curr_line, main.lineCount)
+  
     flags.UNSAVED = true
-
-    if r == view.BOTTOM_LINE {
+  
+    if r == view.TOP_LINE {
       draw_screen()
-      txt.plot(view.LEFT_MARGIN,r)
-      cursor.replace(view.LEFT_MARGIN,r)
+      txt.plot(view.LEFT_MARGIN, r)
+      cursor.replace(view.LEFT_MARGIN, r)
+    }
+    else if r == view.BOTTOM_LINE {
+      draw_screen()
+      txt.plot(view.LEFT_MARGIN, r)
+      cursor.replace(view.LEFT_MARGIN, r)
     }
     else {
-      txt.scrolldown_nlast(r, view.LEFT_MARGIN) ; 2nd param is column offset to start
-
-      txt.plot(view.LEFT_MARGIN,r)
+      txt.scrolldown_nlast(r, view.LEFT_MARGIN)
+      txt.plot(view.LEFT_MARGIN, r)
       prints(view.BLANK_LINE76)
-
-      txt.plot(0,view.BOTTOM_LINE+1)
+      txt.plot(0, view.BOTTOM_LINE+1)
       prints(view.BLANK_LINE79)
-
-      ; handle lines as they shift down if adding lines mid screen on a
-      ; short document
-      if main.lineCount <= view.HEIGHT and r != (main.lineCount+view.TOP_LINE) {
-         ; prog8 will short circut here if the first condition is false, so it
-         ; avoids lineCount (uword) overflowing "as ubyte"
-         txt.plot(view.LEFT_MARGIN, (main.lineCount as ubyte)+view.TOP_LINE-1)
-         main.printLineNum(main.lineCount)
-      }
-
-      txt.plot(view.c(),r+1)
-      cursor.restore_current_char()
-      cursor.saved_char = $20
-
-      txt.plot(view.LEFT_MARGIN,r)
-      cursor.place(view.LEFT_MARGIN,r)
+      txt.plot(view.LEFT_MARGIN, r)
+      cursor.hide()
+      cursor.place(view.LEFT_MARGIN, r)
     }
-
+  
     main.update_tracker()
   }
 
