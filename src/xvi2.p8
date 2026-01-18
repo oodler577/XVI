@@ -1,23 +1,20 @@
 ; FEEDBACK:
-; - Sam    : add A, I, 1G, ZZ, :q!, (Done: i, G, x, dd, yy, R, r) (Later: :/)
+; - Sam    : (Later: :/)
 ; - Gillham: add D, dG,  (Done: 0, Y)
-; - p,P are buggy, "pastes the line in minus the whitespace at the start"
 
 ; TODO:
+; - **** add D, dG for Gillham
+; - **** making initial start up option/buffer presentation as close to vim as possible
 ; - get rid of full screen redraw with "dd"
 ; - disallow ":e" (new buffer) if another buffer is already active
-
-; **DOING** : <- start here!!
+; - implement a proper commandline parser
 ; - add fast "scroll_down" on in 'R' and hit 'enter' (currently way to slow
 ; -- when it hits draw_screen() on new buffer)
-; - making initial start up option/buffer presentation as close to vim as possible
 
 ; ONGOING:
 ; - regression testing
 
 ; BUGS:
-; - get crash and monitor prompt at the end of the document in some case;
-; -- need to figure out how to reproduce it (haven't gotten it in a while)
 
 ; STRETCH TODO:
 ; - :set number / :set nonumber (turns line numbers on/off)
@@ -34,11 +31,18 @@
 ; - implement flag-based "do stuff" idea for alerts (from Tony)
 
 ; DONE:
+; - added  A, I, i, 1G, G, x, dd, yy, R, r, ZZ, :q! (Sam's set)
+; - i,a now delete like vim; it was carrying a character incorrectly
+; - p,P are buggy, "pastes the line in minus the whitespace at the start"
 ; - g leaves reverse character
 ; - O bug when on line 1
 ; - on clean exit, turn ISO
 ; - added Y
 ; - delete swap file after saving
+; - get crash and monitor prompt at the end of the document in some case;
+; -- need to figure out how to reproduce it (haven't gotten it in a while)
+; - fixed issue where I,i,a,A were not preserving vim's behavior to not delete
+; -- the cursor character when it hit the left most margin while in nav mode
 
 %zeropage basicsafe
 %option no_sysinit
@@ -77,16 +81,7 @@ view {
   str         BLANK_LINE76    = " " * 76
   uword       CURR_TOP_LINE   = 1  ; tracks which actual doc line is at TOP_LINE
   uword[main.MaxLines] INDEX       ; Line to address look up
-  ubyte FREEIDX               = 0
-  uword[main.MaxLines] FREE        ; freed addresses to reuse
   uword       CLIPBOARD       = 0  ; holds the address of the current line we can "paste"
-
-  sub push_freed (uword addr) -> ubyte {
-    view.FREE[view.FREEIDX] = addr
-    ubyte addr_idx = view.FREEIDX
-    view.FREEIDX++
-    return addr_idx
-  }
 
   sub r() -> ubyte {
     return txt.get_row()
@@ -315,7 +310,7 @@ main {
     this.prev = 0
     this.next = 0
     this.text = txtbuf
-    strings.trim(initial)
+    strings.rstrip(initial)
     void strings.copy(view.BLANK_LINE79, this.text) ; initialize with BLANK_LINE79, eliminates random garbage
     void strings.copy(initial, this.text); then add text
     @(this.text + MaxLength) = 0         ; null terminate
@@ -475,7 +470,7 @@ main {
   
     ubyte i
     ubyte ub
-    ubyte maxLen = main.MaxLength
+    const ubyte maxLen = main.MaxLength
   
     void diskio.f_open_w_seek(filepath)
   
@@ -492,7 +487,7 @@ main {
     while line != 0 {
       ; prepare this line
       void strings.copy(line.text, writeBuffer)
-      void strings.rstrip(writeBuffer)
+      strings.rstrip(writeBuffer)
   
       ; write only printable ISO bytes from the fixed-width line buffer
       for i in 0 to maxLen-1 {
@@ -757,6 +752,25 @@ main {
             goto YYLOOP
           }
         }
+        'Z' -> {
+          if main.MODE == mode.NAV {
+            ZZLOOP:
+            void, char = cbm.GETIN()
+            when char {
+              $1b -> {       ; ESC key, throw into NAV mode from any other mode
+                toggle_nav()
+                goto NAVCHARLOOP
+              }
+              'Z' -> {
+                save_current_file()
+                txt.clear_screenchars($20) 
+                txt.iso_off()
+                sys.exit(0)
+              }
+            }
+            goto ZZLOOP
+          }
+        }
         'P' -> {
           if main.MODE == mode.NAV {
             main.paste_line_above()
@@ -807,7 +821,7 @@ main {
         }
         'a' -> { ; append after cursor (vim-like)
           if main.MODE == mode.NAV {
-
+            ASTART: 
             ; move one char right before inserting (append-after-cursor)
             ubyte ac = view.c()
             ubyte ar = view.r()
@@ -864,10 +878,13 @@ main {
             ABACKSPACE:
             ; delete char to the left (vim-ish insert backspace)
             if view.c() <= view.LEFT_MARGIN {
-              txt.plot(view.LEFT_MARGIN, view.r())
-              cursor.place(view.c(), view.r())
+              ; this preserves the behavior of vim when in insert mode
+              ; and hitting backspace, runs into the left margin, nothing
+              ; is done
               goto ALOOP
             }
+            cursor.saved_char = $20
+            cursor.restore_current_char();
             txt.plot(view.c()-1, view.r())
             cursor.place(view.c(), view.r())
             main.delete_xy_shift_left()
@@ -894,19 +911,16 @@ main {
             goto ALOOP
           }
         }
-
         'i' -> { ; insert at cursor (vim-like)
           if main.MODE == mode.NAV {
             main.MODE = mode.INSERT
             main.update_tracker()
-
             ILOOP:
             main.MODE = mode.INSERT
             void, char = cbm.GETIN()
             if char == $00 {
               goto ILOOP
             }
-
             when char {
               $1b -> {       ; <esc>
                 toggle_nav()
@@ -927,12 +941,6 @@ main {
                 if char < 32 or char > 126 {
                   goto ILOOP
                 }
-                ; if it's a double-quote, clear quote mode first for compatibility
-        ; not sure why this is not needed .. 
-        ; .... ; if it's a double-quote, clear quote mode first for compatibility
-        ;        if char == $22 {
-        ;          cbm.CHROUT($80)
-        ;        }
                 goto IINSERTCHAR
               }
             }
@@ -941,10 +949,13 @@ main {
             IBACKSPACE:
             ; delete char to the left (vim-ish insert backspace)
             if view.c() <= view.LEFT_MARGIN {
-              txt.plot(view.LEFT_MARGIN, view.r())
-              cursor.place(view.c(), view.r())
+              ; this preserves the behavior of vim when in insert mode
+              ; and hitting backspace, runs into the left margin, nothing
+              ; is done
               goto ILOOP
             }
+            cursor.saved_char = $20
+            cursor.restore_current_char();
             txt.plot(view.c()-1, view.r())
             cursor.place(view.c(), view.r())
             main.delete_xy_shift_left()
@@ -1038,14 +1049,37 @@ main {
         }
 
         ; N A V I G A T I O N
-        '^','0' -> { ; jump to start of line
+        '^','0','I' -> { ; jump to start of line
           if main.MODE == mode.NAV {
             jump_to_left()
+            if char == 'I' {
+              goto ILOOP ; go now into insert mode
+            }
           }
         }
-        '$' -> { ; jump top end of line
+        '$','A' -> { ; jump top end of line
           if main.MODE == mode.NAV {
             jump_to_right()
+            if char == 'A' {
+              goto ASTART ; go now into insert mode
+            }
+          }
+        }
+        '1' -> { ; 1G
+          if main.MODE == mode.NAV {
+            gLOOP:
+            void, char = cbm.GETIN()
+            when char {
+              $1b -> {       ; ESC key, throw into NAV mode from any other mode
+                toggle_nav()
+                goto NAVCHARLOOP
+              }
+              'G' -> {
+                jump_to_begin()
+                goto NAVCHARLOOP
+              }
+            }
+            goto gLOOP
           }
         }
         'g' -> {
@@ -1380,9 +1414,6 @@ main {
     ^^Line curr_addr = get_Line_addr(r) ; line being deleted
     ^^Line prev_addr = curr_addr.prev   ; line before line being deleted
     ^^Line next_addr = curr_addr.next   ; line after line being deleted
-
-    ; track "freed" Lines, returns index in view.FREE
-    void view.push_freed(curr_addr)
 
     ; short circuit curr_line out of links
     if prev_addr != 0 {

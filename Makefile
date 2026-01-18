@@ -7,6 +7,7 @@ TARGET  ?= cx16
 EMU     ?= x16emu
 VERSION ?= 1.2.0
 PKG     ?= XVI
+OPT     ?=
 
 # --- preprocessing for xvi2 ---
 XVI2_SRC := src/xvi2.p8
@@ -42,7 +43,7 @@ trace:
 br: build run
 
 build:
-	$(PROG8C) -target $(TARGET) $(XVI2_SRC)
+	$(PROG8C) $(OPT) -target $(TARGET) $(XVI2_SRC)
 
 run:
 	$(EMU) -debug -scale 2 -prg xvi2.prg -run -gif demo.gif
