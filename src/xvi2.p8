@@ -3,8 +3,9 @@
 ; - Gillham: add D, dG,  (Done: 0, Y)
 
 ; TODO:
-; - **** add D, dG for Gillham
+; - **** add 'D', 'dG' for Gillham
 ; - **** making initial start up option/buffer presentation as close to vim as possible
+; -- as part of that, "~" is not present at the start in some cases, fix that
 ; - get rid of full screen redraw with "dd"
 ; - disallow ":e" (new buffer) if another buffer is already active
 ; - implement a proper commandline parser
