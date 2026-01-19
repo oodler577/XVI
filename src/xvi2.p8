@@ -1,11 +1,9 @@
 ; FEEDBACK:
 ; - Sam    : (Later: :/)
-; - Gillham: add D, dG,  (Done: 0, Y)
+; - Gillham: add dG,  (Done: D, 0, Y)
 
 ; TODO:
-; - **** add 'D', 'dG' for Gillham
-; - **** making initial start up option/buffer presentation as close to vim as possible
-; -- as part of that, "~" is not present at the start in some cases, fix that
+; - **** add 'dG' for Gillham
 ; - get rid of full screen redraw with "dd"
 ; - disallow ":e" (new buffer) if another buffer is already active
 ; - implement a proper commandline parser
@@ -14,6 +12,7 @@
 
 ; ONGOING:
 ; - regression testing
+; - verify as part of that, "~" is not present at the start in some cases, fix that
 
 ; BUGS:
 
@@ -24,7 +23,7 @@
 ; - do not write contiguous spaces (fully blank line, trim when writing)
 ; -- this might be an optimization that is needed when we increase line
 ; -- support > 140
-; 
+;
 ; - stack based "undo" (p/P, o/O, dd)
 ; - fast "save_line_buffer"
 
@@ -32,6 +31,13 @@
 ; - implement flag-based "do stuff" idea for alerts (from Tony)
 
 ; DONE:
+; - implemented D
+; - added a bottom status that is more familiar to vim users, CTRL+g now
+; -- triggers a "verbose" status mode on/off (shows old bottom status, which
+; -- was more verbose
+; - ZZ now checks to make sure doc.filepath is set - not true if just editing
+; -- a buffer
+; - make start up to edit a file or buffer more familiar
 ; - added  A, I, i, 1G, G, x, dd, yy, R, r, ZZ, :q! (Sam's set)
 ; - i,a now delete like vim; it was carrying a character incorrectly
 ; - p,P are buggy, "pastes the line in minus the whitespace at the start"
@@ -68,6 +74,7 @@ mode {
 flags {
   ; display flags
   bool        UNSAVED         = false
+  bool        VERBOSE_STATUS  = false
 }
 
 view {
@@ -194,6 +201,7 @@ cursor {
 
   sub command_prompt () {
      ubyte cmdchar
+     cursor.hide()
      void strings.copy(" " * 60, cmdBuffer)
      txt.plot(0, view.FOOTER_LINE) ; move cursor to the starting position for writing
      main.prints(view.BLANK_LINE79)
@@ -208,6 +216,7 @@ cursor {
          txt.chrout(cmdchar)
        }
        else {
+
          ; reads in the command and puts it into view.cmdBuffer for additional
          ; processing in the view code
          ubyte i
@@ -333,6 +342,7 @@ main {
 
     ubyte idx   = 0
     str lineBuffer  = " " * (MaxLength + 1)
+
     repeat lines {
       uword lineAddr = allocLine(lineBuffer)
       idx = main.lineCount as ubyte
@@ -350,14 +360,18 @@ main {
     freeAll()
     txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
     void strings.copy(filepath,doc.filepath)
-    txt.print("Loading ")
-    say(doc.filepath)
-    sys.wait(20)
-    txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
+
+    if not diskio.exists(doc.filepath) {
+      warn("Can't open file!")
+      splash()
+      return
+    }
+
+    info("Loading file ...")
+
     flags.UNSAVED = false
     main.lineCount = 0
 
-    ubyte tries = 0
     ubyte idx   = 0
     READFILE:
     cbm.CLEARST() ; set so READST() is initially known to be clear
@@ -400,25 +414,16 @@ main {
       txt.clear_screen()
     }
     else {
-      tries++
       diskio.f_close()
-      if tries <= 15 {
-        goto READFILE
-      }
-      else {
-        txt.plot(0, view.BOTTOM_LINE)
-        prints(view.BLANK_LINE79)
-        txt.plot(view.LEFT_MARGIN, view.BOTTOM_LINE)
-        txt.print("can't open file after 15 attempts ...")
-        sys.wait(120)
-        splash()
-      }
+      warn("Can't open file!")
+      splash()
     }
   }
 
   sub splash() {
     txt.clear_screen()
     txt.plot(0,view.TOP_LINE)
+    init_empty_buffer(1)
     repeat 20 {
       txt.plot(0, txt.get_row())
       say("~    ")
@@ -438,11 +443,21 @@ main {
     say("~                  type  <esc>i to open new buffer in Insert  mode ")
     say("~                  type  :e filepath<Enter>    to load file to edit")
     say("~                  type  :q<Enter>             to exit             ")
-    repeat 20 {
+    repeat 21 {
       txt.plot(0, txt.get_row())
       say("~    ")
     }
-    say("~                                                             build 09bc0fd4")
+  }
+
+  sub clear_splash() {
+    txt.clear_screen()
+    txt.plot(0,view.TOP_LINE+1)
+    repeat 55 {
+      txt.plot(0, txt.get_row())
+      say("~    ")
+    }
+    txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
+    cursor.place(view.LEFT_MARGIN, view.TOP_LINE)
   }
 
   sub save_current_file() {
@@ -464,32 +479,32 @@ main {
      save_as(doc.filepath)
      diskio.delete(oldback)
   }
-  
+
   ; Safe save: never dereference line when it becomes 0
   sub save_as(str filepath) {
     info_noblock("saving ...")
-  
+
     ubyte i
     ubyte ub
     const ubyte maxLen = main.MaxLength
-  
+
     void diskio.f_open_w_seek(filepath)
-  
+
     if main.lineCount == 0 {
       diskio.f_close_w()
       flags.UNSAVED = false
       info_noblock("          ")
       return
     }
-  
+
     str writeBuffer = " " * maxLen
     ^^Line line = view.INDEX[0]
-  
+
     while line != 0 {
       ; prepare this line
       void strings.copy(line.text, writeBuffer)
       strings.rstrip(writeBuffer)
-  
+
       ; write only printable ISO bytes from the fixed-width line buffer
       for i in 0 to maxLen-1 {
         ub = writeBuffer[i]
@@ -500,17 +515,17 @@ main {
           void diskio.f_write(&ub, 1)
         }
       }
-  
+
       ; newline (LF)
       ub = $0a
       void diskio.f_write(&ub, 1)
-  
+
       ; advance
       line = line.next
     }
-  
+
     diskio.f_close_w()
-  
+
     flags.UNSAVED = false
     info_noblock("          ")
   }
@@ -535,19 +550,17 @@ main {
     main.lineCount            = 0
     main.MODE = mode.INIT
 
-    txt.plot(0,1)
-    splash()
-
     sys.wait(20)
     ;load_file("sample6.txt")
     ;draw_initial_screen()
-    ;cursor.place(view.LEFT_MARGIN, view.TOP_LINE)
-
-    main.update_tracker()
 
     ubyte char = 0
     ubyte col
     ubyte row
+
+    ;txt.plot(0,1)
+    ;cursor.place(view.LEFT_MARGIN, view.TOP_LINE)
+    splash()
 
     ; this is the main loop
     NAVCHARLOOP:
@@ -563,49 +576,43 @@ main {
         goto NAVCHARLOOP
       }
 
-      when char {
-        $1b -> {       ; ESC key
-          ; On splash/INIT: treat ESC as a prefix so ESC+R / ESC+i is instant.
-          if main.MODE == mode.INIT {
-
-            ; grab the next key (wait until we actually get one)
-            ubyte k = $00
-            while k == $00 {
-              void, k = cbm.GETIN()
-            }
-
-            when k {
-              'R' -> {
-                init_empty_buffer(1)
-                main.MODE = mode.REPLACE
-                main.update_tracker()
-                goto RLOOP2
-              }
-              'i' -> {
-                init_empty_buffer(1)
-                main.MODE = mode.INSERT
-                main.update_tracker()
-                goto ILOOP
-              }
-              'a' -> {
-                init_empty_buffer(1)
-                main.MODE = mode.INSERT
-                main.update_tracker()
-                goto ALOOP
-              }
-              else -> {
-                ; fall back to normal NAV
-                init_empty_buffer(1)
-                toggle_nav()
-                goto NAVCHARLOOP
-              }
-            }
+      ; On splash/INIT: treat ESC as a prefix so ESC+R / ESC+i is instant.
+      if main.MODE == mode.INIT {
+        when char {
+          'R','i','a' -> {
+            toggle_nav()
+            main.clear_splash()
+            main.printLineNum(1)
+            main.update_tracker()
           }
+          ':' -> {
+            toggle_nav()
+            main.clear_splash()
+          }
+        }
 
-          ; Normal behavior outside INIT
-          toggle_nav()
+        ; "goto" dispatcher on edit or command modes
+        when char {
+          'R'  -> { goto RLOOP2      }
+          'i'  -> { goto ILOOP       }
+          'a'  -> { goto ALOOP       }
+          ':'  -> { goto EVALCOMMAND }
+        }
+        goto NAVCHARLOOP
+      }
+
+      when char {
+        $07 -> {
+          if flags.VERBOSE_STATUS == true {
+            flags.VERBOSE_STATUS = false
+          }
+          else {
+            flags.VERBOSE_STATUS = true
+          }
+          main.update_tracker()
         }
         $3a -> {       ; ':',  mode
+          EVALCOMMAND:
           if main.MODE == mode.NAV {
             main.MODE = mode.COMMAND
 
@@ -665,7 +672,7 @@ main {
                   warn("Unsaved changes exist. Use q! to override ...")
                 }
                 else {
-                  txt.clear_screenchars($20) 
+                  txt.clear_screenchars($20)
                   txt.iso_off()
                   sys.exit(0)
                 }
@@ -702,6 +709,11 @@ main {
           toggle_nav()
           cursor.replace(col, row)
           main.update_tracker()
+        }
+        'D' -> {
+          if main.MODE == mode.NAV {
+            main.clear_current_line()
+          }
         }
         'd' -> {
           if main.MODE == mode.NAV {
@@ -755,21 +767,29 @@ main {
         }
         'Z' -> {
           if main.MODE == mode.NAV {
+            ; make sure we're not use editing a buffer
+            if doc.filepath[0] == $20 {
+              ; fall through, sys.exit should trigger first
+              warn("No file specified. Use ':w filename' first. ...")
+              goto NAVCHARLOOP
+            }
             ZZLOOP:
             void, char = cbm.GETIN()
+            if char == $00 {
+              goto ZZLOOP
+            }
             when char {
-              $1b -> {       ; ESC key, throw into NAV mode from any other mode
-                toggle_nav()
-                goto NAVCHARLOOP
-              }
-              'Z' -> {
+             $1b -> {       ; ESC key, throw into NAV mode from any other mode
+               toggle_nav()
+               goto NAVCHARLOOP
+             }
+             'Z' -> {
                 save_current_file()
-                txt.clear_screenchars($20) 
+                txt.clear_screenchars($20)
                 txt.iso_off()
                 sys.exit(0)
               }
             }
-            goto ZZLOOP
           }
         }
         'P' -> {
@@ -822,7 +842,7 @@ main {
         }
         'a' -> { ; append after cursor (vim-like)
           if main.MODE == mode.NAV {
-            ASTART: 
+            ASTART:
             ; move one char right before inserting (append-after-cursor)
             ubyte ac = view.c()
             ubyte ar = view.r()
@@ -866,7 +886,7 @@ main {
                 if char < 32 or char > 126 {
                   goto ALOOP
                 }
-        ; not sure why this is not needed .. 
+        ; not sure why this is not needed ..
         ; .... ; if it's a double-quote, clear quote mode first for compatibility
         ;        if char == $22 {
         ;          cbm.CHROUT($80)
@@ -1155,35 +1175,35 @@ main {
       warn("Clipboard is empty ..")
       return
     }
-  
+
     ubyte r = view.r()
     uword curr_line = main.get_line_num(r)
-  
+
     ^^Line curr_addr = get_Line_addr(r)
     ^^Line old_prev  = 0
     ^^Line copy_addr = view.CLIPBOARD
     ^^Line new_prev  = main.allocNewLine(copy_addr.text)
-  
+
     if curr_line > 1 {
       old_prev = view.INDEX[(curr_line as ubyte) - 2]
     }
-  
+
     new_prev.prev = old_prev
     new_prev.next = curr_addr
-  
+
     curr_addr.prev = new_prev
-  
+
     if old_prev != 0 {
       old_prev.next = new_prev
     }
-  
+
     main.lineCount = view.insert_line_before(new_prev, curr_line, main.lineCount)
-  
+
     void debug.assert(view.INDEX[curr_line as ubyte - 1], new_prev, debug.EQ, "INDEX[curr_line as ubyte - 1] == new_prev")
     void debug.assert(view.INDEX[curr_line as ubyte], curr_addr, debug.EQ, "INDEX[curr_line as ubyte] == curr_addr")
-  
+
     flags.UNSAVED = true
-  
+
     if r == view.TOP_LINE {
       draw_screen()
       txt.plot(view.LEFT_MARGIN, r)
@@ -1199,7 +1219,7 @@ main {
       txt.plot(view.LEFT_MARGIN, r)
       cursor.replace(view.LEFT_MARGIN, r)
     }
-  
+
     main.update_tracker()
   }
 
@@ -1253,30 +1273,30 @@ main {
 
   sub insert_line_above() {
     ubyte r = view.r()
-  
+
     uword curr_line = main.get_line_num(r)
-  
+
     ^^Line curr_addr = get_Line_addr(r)
     ^^Line old_prev  = 0
     ^^Line new_prev  = main.allocNewLine("  ")
-  
+
     if curr_line > 1 {
       old_prev = view.INDEX[(curr_line as ubyte) - 2]
     }
-  
+
     new_prev.prev = old_prev
     new_prev.next = curr_addr
-  
+
     curr_addr.prev = new_prev
-  
+
     if old_prev != 0 {
       old_prev.next = new_prev
     }
-  
+
     main.lineCount = view.insert_line_before(new_prev, curr_line, main.lineCount)
-  
+
     flags.UNSAVED = true
-  
+
     if r == view.TOP_LINE {
       draw_screen()
       txt.plot(view.LEFT_MARGIN, r)
@@ -1297,7 +1317,7 @@ main {
       cursor.hide()
       cursor.place(view.LEFT_MARGIN, r)
     }
-  
+
     main.update_tracker()
   }
 
@@ -1369,6 +1389,23 @@ main {
     view.CLIPBOARD = curr_addr
 
     cursor.replace(c, r)
+    main.update_tracker()
+  }
+
+  sub clear_current_line() {
+    ubyte c = view.c()
+    ubyte r = view.r()
+
+    ^^Line curr_addr = get_Line_addr(r) ; line being deleted
+
+    ubyte i
+    for i in (c-view.LEFT_MARGIN) to main.MaxLength-1 {
+      @(curr_addr.text + i) = $20
+    }
+
+    void redraw_line(curr_addr, r)
+
+    cursor.replace(c-1, r)
     main.update_tracker()
   }
 
@@ -1518,7 +1555,9 @@ main {
         txt.plot(0, r)
         prints(view.BLANK_LINE79)
         txt.plot(0, r)
-        main.printLineNum(lineNum)
+        if main.MODE != mode.INIT {      ; prevent line '1' from showing in splash on start
+          main.printLineNum(lineNum)
+        }
         txt.plot(view.LEFT_MARGIN, r)
 
         void strings.copy(line.text,tmp) ; also figure out why I have to do this to get rid of errant space in next line
@@ -1611,7 +1650,7 @@ main {
 
   sub get_end_col(ubyte r) -> ubyte {
     ^^Line curr_addr = get_Line_addr(r)
-  
+
     ; Find last printable ISO byte (32..126) in the line buffer.
     ; If none, return LEFT_MARGIN.
     ubyte last = 255
@@ -1625,11 +1664,11 @@ main {
         last = i
       }
     }
-  
+
     if last == 255 {
       return view.LEFT_MARGIN
     }
-  
+
     uword col = view.LEFT_MARGIN + last
     if col > view.RIGHT_MARGIN {
       col = view.RIGHT_MARGIN
@@ -1644,14 +1683,14 @@ main {
     if r < view.TOP_LINE or r > view.BOTTOM_LINE {
       return
     }
-  
+
     ; empty document guard
     if main.lineCount == 0 {
       return
     }
-  
+
     ubyte end_col = get_end_col(r)
-  
+
     cursor.restore_current_char()
     txt.plot(end_col, r)
     default_col = view.c()
@@ -1805,15 +1844,15 @@ main {
   sub save_line_buffer() {
     ubyte c = view.c()
     ubyte r = view.r()
-  
+
     ^^Line curr_addr = get_Line_addr(r)
-  
+
     ubyte i
     for i in 0 to MaxLength-1 {
       @(curr_addr.text + i) = txt.getchr(view.LEFT_MARGIN + i, r)
     }
     @(curr_addr.text + MaxLength) = 0      ; null terminate
-  
+
     cursor.replace(c,r)
     txt.plot(c,r)
     main.update_tracker()
@@ -1860,10 +1899,10 @@ main {
     if char < 32 or char > 126 {
       return
     }
-  
+
     ubyte c = view.c()
     ubyte r = view.r()
-  
+
     ; hard guard: prevent out-of-range writes
     if c < view.LEFT_MARGIN {
       c = view.LEFT_MARGIN
@@ -1871,23 +1910,23 @@ main {
     if c > view.RIGHT_MARGIN-1 {
       return
     }
-  
+
     ^^Line curr_addr = get_Line_addr(r)
-  
+
     ubyte i
     for i in view.RIGHT_MARGIN-1 to c+1 step -1 {
       @(curr_addr.text + (i - view.LEFT_MARGIN)) = @(curr_addr.text + (i - view.LEFT_MARGIN - 1))
     }
-  
+
     @(curr_addr.text + (c - view.LEFT_MARGIN)) = char
     @(curr_addr.text + MaxLength) = 0       ; null terminate
-  
+
     cursor.saved_char = char
-  
+
     void redraw_line(curr_addr, r)
-  
+
     cursor.replace(c,r)
-  
+
     txt.plot(c,r)
     default_col = view.c()
     main.update_tracker()
@@ -1969,39 +2008,59 @@ main {
   sub update_tracker () {
     ubyte X = view.c()
     ubyte Y = view.r()
-  
+
     ; Always draw tracker on the footer line only
     txt.plot(2, view.FOOTER_LINE)
     prints(view.BLANK_LINE76)
-  
+
     ; Use a known color scheme for footer baseline (optional)
     ; If you don't want this, remove these two lines.
     txt.color2($1,$6)   ; white on blue (example), match your normal scheme
-  
+
     txt.plot(1, view.FOOTER_LINE)
-    printw(main.lineCount)
-    prints(" lines, x: ")
-    printw(X - view.LEFT_MARGIN + 1)
-    prints(", y: ")
-    printw(Y - view.TOP_LINE + 1)
-    prints(" TOP: ")
-    printw(view.CURR_TOP_LINE)
-    prints(" BOT: ")
-    printw(view.CURR_TOP_LINE + view.HEIGHT - 1)
-    prints(" CNT: ")
-    printw(main.NAVCHARCOUNT)
-  
-    ; Status badge MUST be on footer line (bugfix)
-    txt.plot(79-9, view.FOOTER_LINE)
-    if flags.UNSAVED == true {
-      txt.color2($6,$1)
-      prints("(UNSAVED)")
-      txt.color2($1,$6)
+
+    if flags.VERBOSE_STATUS == false {
+      txt.plot(0, view.FOOTER_LINE)
+      prints(view.BLANK_LINE79)
+      txt.plot(1, view.FOOTER_LINE)
+      if doc.filepath[0] != $20 {
+        prints(doc.filepath)
+        if flags.UNSAVED == true {
+          prints("*")
+        }
+      }
+      txt.plot(79-12, view.FOOTER_LINE)
+      printW(Y - view.TOP_LINE + 1)
+      prints(",")
+      printW(X - view.LEFT_MARGIN + 1)
+      txt.plot(79-3, view.FOOTER_LINE)
+      printW(main.lineCount)
     }
-    else if main.MODE > mode.INIT {
-      prints("( SAVED )")
+    else {
+      printw(main.lineCount)
+      prints(" lines, x: ")
+      printw(X - view.LEFT_MARGIN + 1)
+      prints(", y: ")
+      printw(Y - view.TOP_LINE + 1)
+      prints(" TOP: ")
+      printw(view.CURR_TOP_LINE)
+      prints(" BOT: ")
+      printw(view.CURR_TOP_LINE + view.HEIGHT - 1)
+      prints(" CNT: ")
+      printw(main.NAVCHARCOUNT)
+
+      ; Status badge MUST be on footer line (bugfix)
+      txt.plot(79-9, view.FOOTER_LINE)
+      if flags.UNSAVED == true {
+        txt.color2($6,$1)
+        prints("(UNSAVED)")
+        txt.color2($1,$6)
+      }
+      else if main.MODE > mode.INIT {
+        prints("( SAVED )")
+      }
     }
-  
+
     ; Mode indicator (upper left) — keep as you had it
     if main.MODE == mode.REPLACE {
       info_noblock_LEFT("-- REPLACE --")
@@ -2015,7 +2074,7 @@ main {
     else {
       info_noblock_LEFT("             ")
     }
-  
+
     ; Restore cursor position
     txt.plot(X, Y)
   }
