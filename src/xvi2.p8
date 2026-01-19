@@ -2,6 +2,9 @@
 ; - Sam    : (Later: :/)
 ; - Gillham: add dG,  (Done: D, 0, Y)
 
+; BUGS:
+; - ":w<enter>" on splash screen puts the editor in a hung or weird stated
+
 ; TODO:
 ; - **** add 'dG' for Gillham
 ; - get rid of full screen redraw with "dd"
@@ -13,8 +16,6 @@
 ; ONGOING:
 ; - regression testing
 ; - verify as part of that, "~" is not present at the start in some cases, fix that
-
-; BUGS:
 
 ; STRETCH TODO:
 ; - :set number / :set nonumber (turns line numbers on/off)
@@ -363,7 +364,6 @@ main {
 
     if not diskio.exists(doc.filepath) {
       warn("Can't open file!")
-      splash()
       return
     }
 
@@ -768,9 +768,8 @@ main {
         'Z' -> {
           if main.MODE == mode.NAV {
             ; make sure we're not use editing a buffer
-            if doc.filepath[0] == $20 {
-              ; fall through, sys.exit should trigger first
-              warn("No file specified. Use ':w filename' first. ...")
+            if @(doc.filepath+1) == $20 {
+              warn("No filename. Use :w filename")
               goto NAVCHARLOOP
             }
             ZZLOOP:
@@ -2023,11 +2022,19 @@ main {
       txt.plot(0, view.FOOTER_LINE)
       prints(view.BLANK_LINE79)
       txt.plot(1, view.FOOTER_LINE)
-      if doc.filepath[0] != $20 {
+      if @(doc.filepath+1) != $20 {
+        cbm.CHROUT($22)
         prints(doc.filepath)
+        cbm.CHROUT($22)
         if flags.UNSAVED == true {
-          prints("*")
+          prints(" [modified]")
         }
+        else {
+          prints(" [saved]")
+        }
+      }
+      else {
+        prints("[unsaved buffer]")
       }
       txt.plot(79-12, view.FOOTER_LINE)
       printW(Y - view.TOP_LINE + 1)
@@ -2126,7 +2133,7 @@ main {
   }
 
   sub warn(str message) {
-    alert(message, 120, $2, $1)
+    alert(message, 50, $2, $1)
   }
 
   sub alert(str message, ubyte delay, ubyte color1, ubyte color2) {
