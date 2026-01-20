@@ -7,8 +7,9 @@
 
 ; TODO:
 ; - **** add 'dG' for Gillham
+; - add wq!
+; - isolate remaining cursor issues
 ; - get rid of full screen redraw with "dd"
-; - disallow ":e" (new buffer) if another buffer is already active
 ; - implement a proper commandline parser
 ; - add fast "scroll_down" on in 'R' and hit 'enter' (currently way to slow
 ; -- when it hits draw_screen() on new buffer)
@@ -32,6 +33,8 @@
 ; - implement flag-based "do stuff" idea for alerts (from Tony)
 
 ; DONE:
+; - disallow ":e" (new buffer) if another buffer is already active
+; -- unless :e! is used - this works on all cases, including changes files
 ; - implemented D
 ; - added a bottom status that is more familiar to vim users, CTRL+g now
 ; -- triggers a "verbose" status mode on/off (shows old bottom status, which
@@ -74,6 +77,7 @@ mode {
 
 flags {
   ; display flags
+  bool        BUFFER_ONLY     = true
   bool        UNSAVED         = false
   bool        VERBOSE_STATUS  = false
 }
@@ -153,7 +157,6 @@ view {
 }
 
 cursor {
-  str cmdBuffer = " " * 60
   ubyte saved_char
 
   sub save_char(ubyte c, ubyte r) {
@@ -200,7 +203,13 @@ cursor {
     txt.plot(new_c,new_r)   ;; move cursor back after txt.chrout advances cursor
   }
 
-  sub command_prompt () {
+}
+
+command {
+  str cmdBuffer = " " * 60
+  ubyte col, row
+
+  sub prompt () {
      ubyte cmdchar
      cursor.hide()
      void strings.copy(" " * 60, cmdBuffer)
@@ -224,12 +233,91 @@ cursor {
          for i in 0 to strings.length(cmdBuffer) - 1 {
            cmdBuffer[i] = txt.getchr(i+1, view.FOOTER_LINE)
          }
-         strings.strip(cursor.cmdBuffer)
+         strings.strip(command.cmdBuffer)
          return;
        }
      goto CMDINPUT
   }
 
+  sub process() {
+    ubyte cmd_offset = 1
+    bool force = false
+
+    col = view.c()
+    row = view.r()
+
+    if command.cmdBuffer[1] == $21 { ; $21 is "!"
+      force = true
+      cmd_offset = 2
+    }
+
+    ; parse out file name (everything after ":N")
+    str cmd = " " * 60
+    ubyte cmd_length = strings.copy(command.cmdBuffer, cmd)
+    str fn1 = " " * 60
+
+    strings.slice(cmd, cmd_offset, cmd_length-cmd_offset, fn1) ; <- somehow this is affecting main.lineCount ...
+
+    strings.strip(fn1) ; prep filename
+
+    when command.cmdBuffer[0] {
+      'e' -> {
+        if flags.UNSAVED == true and not force {
+          main.warn("Unsaved changes exist.")
+          return
+        }
+        else if strings.length(fn1) > 0 {
+          main.load_file(fn1)
+          main.draw_initial_screen()
+          cursor.place(view.LEFT_MARGIN, view.TOP_LINE)
+        }
+        else {
+          main.init_empty_buffer(1)
+          main.start.char = 'R'
+          flags.UNSAVED = true
+          main.update_tracker()
+        }
+        main.MODE = mode.NAV
+        goto main.start.NAVCHARLOOP
+      }
+      'q' -> {
+        if flags.UNSAVED == true and not force {
+          main.warn("Unsaved changes exist. Use q! to override ...")
+          return
+        }
+        else {
+          txt.clear_screenchars($20)
+          txt.iso_off()
+          sys.exit(0)
+        }
+      }
+      'w' -> {
+        ; 'w' is for "write" - fn1 is the filename
+        if strings.length(fn1) > 0 {
+          if diskio.exists(fn1) and not force {
+            main.warn("File Exists. Use w! to override ...")
+          }
+          else {
+            diskio.delete(fn1)
+            main.save_as(fn1)
+            void strings.copy(fn1, main.doc.filepath)
+          }
+        }
+        else {
+          ; GUARD: refuse :w with no name on a new buffer
+          str cur = " " * 60
+          void strings.copy(main.doc.filepath, cur)
+          strings.trim(cur)
+          if strings.length(cur) == 0 {
+           main.warn("No filename. Use :w filename")
+          }
+          else {
+            main.save_current_file()
+          }
+        }
+      }
+    }
+  }
 }
 
 main {
@@ -358,16 +446,17 @@ main {
 
   sub load_file(str filepath) {
     strings.strip(filepath)
-    freeAll()
     txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
-    void strings.copy(filepath,doc.filepath)
 
-    if not diskio.exists(doc.filepath) {
-      warn("Can't open file!")
+    if not diskio.exists(filepath) {
+      warn("File does not exist!")
       return
     }
 
     info("Loading file ...")
+
+    ; only do this if file wanted is found
+    freeAll()
 
     flags.UNSAVED = false
     main.lineCount = 0
@@ -412,6 +501,8 @@ main {
       }
       diskio.f_close()
       txt.clear_screen()
+      void strings.copy(filepath,doc.filepath)
+      flags.BUFFER_ONLY = false
     }
     else {
       diskio.f_close()
@@ -526,7 +617,8 @@ main {
 
     diskio.f_close_w()
 
-    flags.UNSAVED = false
+    flags.UNSAVED     = false
+    flags.BUFFER_ONLY = false
     info_noblock("          ")
   }
 
@@ -545,7 +637,8 @@ main {
     doc.charset              = 0 ; for future proofing
     doc.startBank            = 1 ; for future proofing
     doc.firstLine            = Buffer
-    doc.filepath             = " " * 76
+    doc.filepath             = " " * 80
+    @(doc.filepath+80)       = 0
 
     main.lineCount            = 0
     main.MODE = mode.INIT
@@ -565,8 +658,6 @@ main {
     ; this is the main loop
     NAVCHARLOOP:
       void, char = cbm.GETIN()
-      col = view.c()
-      row = view.r()
 
     SKIP_NAVCHARLOOP:               ; jump to here to skip input
 
@@ -576,18 +667,24 @@ main {
         goto NAVCHARLOOP
       }
 
+      col = view.c()
+      row = view.r()
+
       ; On splash/INIT: treat ESC as a prefix so ESC+R / ESC+i is instant.
       if main.MODE == mode.INIT {
         when char {
           'R','i','a' -> {
             toggle_nav()
+            flags.UNSAVED = true
             main.clear_splash()
             main.printLineNum(1)
             main.update_tracker()
           }
-          ':' -> {
+          ':'  -> { 
             toggle_nav()
+            flags.UNSAVED = false
             main.clear_splash()
+            goto EVAL_COMMAND
           }
         }
 
@@ -596,7 +693,6 @@ main {
           'R'  -> { goto RLOOP2      }
           'i'  -> { goto ILOOP       }
           'a'  -> { goto ALOOP       }
-          ':'  -> { goto EVALCOMMAND }
         }
         goto NAVCHARLOOP
       }
@@ -612,97 +708,23 @@ main {
           main.update_tracker()
         }
         $3a -> {       ; ':',  mode
-          EVALCOMMAND:
-          if main.MODE == mode.NAV {
-            main.MODE = mode.COMMAND
+          EVAL_COMMAND:
 
-            cursor.command_prompt() ; populates cursor.cmdBuffer
+          if main.MODE == mode.NAV {
+
+            command.prompt()             ; populates command.cmdBuffer
+
+            PROCESS_COMMAND:
 
             ; clear command line
             txt.plot(0, view.FOOTER_LINE)
             prints(view.BLANK_LINE79)
             main.update_tracker()
 
-            ; sets the string index to do the strings.slice below, will change if there is a "!"
-            ; it'll also necessarily change if a command is detected;
-            ; :w filename
-            ; :w! filename
-            ; :q
-            ; :q!
-            ; :wq
-            ; :wq!
-            ; :!some-external-looking-command
-
             SKIP_COMMANDPROMPT:          ; simulate keyboard input by setting cursor.commandBuffer, goto here
 
-            ubyte cmd_offset = 1
-            bool force = false
-            if cursor.cmdBuffer[1] == $21 { ; $21 is "!"
-              force = true
-              cmd_offset = 2
-            }
-
-            ; parse out file name (everything after ":N")
-            str cmd = " " * 60
-            ubyte cmd_length = strings.copy(cursor.cmdBuffer, cmd)
-            str fn1 = " " * 60
-
-            strings.slice(cmd, cmd_offset, cmd_length-cmd_offset, fn1) ; <- somehow this is affecting main.lineCount ...
-
-            strings.strip(fn1) ; prep filename
-
-            when cursor.cmdBuffer[0] {
-              'e' -> {
-                if strings.length(fn1) > 0 {
-                  load_file(fn1)
-                  draw_initial_screen()
-                  col = view.LEFT_MARGIN
-                  row = view.TOP_LINE
-                }
-                else {
-                  init_empty_buffer(1)
-                  char = 'R'
-                  flags.UNSAVED = true
-                  main.update_tracker()
-                  goto main.start.SKIP_NAVCHARLOOP
-                }
-              }
-              'q' -> {
-                if flags.UNSAVED == true and not force {
-                  warn("Unsaved changes exist. Use q! to override ...")
-                }
-                else {
-                  txt.clear_screenchars($20)
-                  txt.iso_off()
-                  sys.exit(0)
-                }
-              }
-              'w' -> {
-                ; 'w' is for "write" - fn1 is the filename
-                if strings.length(fn1) > 0 {
-                  if diskio.exists(fn1) and not force {
-                    warn("File Exists. Use w! to override ...")
-                  }
-                  else {
-                    diskio.delete(fn1)
-                    save_as(fn1)
-                    void strings.copy(fn1, doc.filepath)
-                  }
-                }
-                else {
-                  ; GUARD: refuse :w with no name on a new buffer
-                  str cur = " " * 60
-                  void strings.copy(doc.filepath, cur)
-                  strings.trim(cur)
-                  if strings.length(cur) == 0 {
-                    warn("No filename. Use :w filename")
-                  }
-                  else {
-                    save_current_file()
-                  }
-                }
-              }
-            }
+            command.process()
+            
           }
 
           ;debug.assert(main.lineCount, 93, debug.EQ, "ln 515 ... main.lineCount == 93")
@@ -1041,6 +1063,7 @@ main {
                 if char == $22 {
                   cbm.CHROUT($80)
                 }
+                flags.UNSAVED = true
                 goto RPUTCHAR
               }
             }
@@ -1061,6 +1084,7 @@ main {
             }
             cursor.saved_char = txt.getchr(view.c()+1,view.r())
             cbm.CHROUT(char)
+            flags.UNSAVED = true
             txt.plot(view.c(),view.r())
             cursor.place(view.c(),view.r())
             main.update_tracker()
@@ -1919,6 +1943,7 @@ main {
 
     @(curr_addr.text + (c - view.LEFT_MARGIN)) = char
     @(curr_addr.text + MaxLength) = 0       ; null terminate
+    flags.UNSAVED = true
 
     cursor.saved_char = char
 
