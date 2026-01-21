@@ -1,6 +1,36 @@
 This is just a dump of the things I've knocked out during this initial
 code phase to create a working strawman:
 
+; PARTIALLY DONE:
+; - implement flag-based "do stuff" idea for alerts (from Tony)
+
+; DONE
+
+; - implemented wq, wq! (NEED to add checks around it)
+; - ":w<enter>" on splash screen puts the editor in a hung or weird stated
+; - getting closer to sane handling of opening :e, :e filename, :e filenotfound
+; -- also fixed if in a modified buffer, a new buffer is not created if "e: filenotfound"
+; - disallow ":e" (new buffer) if another buffer is already active
+; -- unless :e! is used - this works on all cases, including changes files
+; - implemented D
+; - added a bottom status that is more familiar to vim users, CTRL+g now
+; -- triggers a "verbose" status mode on/off (shows old bottom status, which
+; -- was more verbose
+; - ZZ now checks to make sure doc.filepath is set - not true if just editing
+; -- a buffer
+; - make start up to edit a file or buffer more familiar
+; - added  A, I, i, 1G, G, x, dd, yy, R, r, ZZ, :q! (Sam's set)
+; - i,a now delete like vim; it was carrying a character incorrectly
+; - p,P are buggy, "pastes the line in minus the whitespace at the start"
+; - g leaves reverse character
+; - O bug when on line 1
+; - on clean exit, turn ISO
+; - added Y
+; - delete swap file after saving
+; - get crash and monitor prompt at the end of the document in some case;
+; -- need to figure out how to reproduce it (haven't gotten it in a while)
+; - fixed issue where I,i,a,A were not preserving vim's behavior to not delete
+; -- the cursor character when it hit the left most margin while in nav mode
 ; - added Y
 ; - harden save_as against never stopping the save (infinite loop?)
 ; - <esc>+O leaves a cursor artifact

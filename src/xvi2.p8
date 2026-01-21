@@ -1,13 +1,11 @@
-; FEEDBACK:
-; - Sam    : (Later: :/)
-; - Gillham: add dG,  (Done: D, 0, Y)
-
 ; BUGS:
-; - ":w<enter>" on splash screen puts the editor in a hung or weird stated
+; - dd bug
+; -- 1. open a file, immediately jump to the botton
+; -- 2. add a few lines at the bottom with 'o', typing some
+; -- 3. hit <esc>, then do "dd"
 
 ; TODO:
-; - **** add 'dG' for Gillham
-; - add wq!
+; - add 'dG' for (gillham)
 ; - isolate remaining cursor issues
 ; - get rid of full screen redraw with "dd"
 ; - implement a proper commandline parser
@@ -18,7 +16,9 @@
 ; - regression testing
 ; - verify as part of that, "~" is not present at the start in some cases, fix that
 
-; STRETCH TODO:
+; FUTURE TODO:
+; - add checks around wq, wq! (buffer, first command?)
+; - :/ (requested by Sam)
 ; - :set number / :set nonumber (turns line numbers on/off)
 ; - wq! - force save, force save and quit
 ; - allow many more lines (convert Line to use str instead permanent line)
@@ -29,31 +29,8 @@
 ; - stack based "undo" (p/P, o/O, dd)
 ; - fast "save_line_buffer"
 
-; PARTIALLY DONE:
-; - implement flag-based "do stuff" idea for alerts (from Tony)
-
 ; DONE:
-; - disallow ":e" (new buffer) if another buffer is already active
-; -- unless :e! is used - this works on all cases, including changes files
-; - implemented D
-; - added a bottom status that is more familiar to vim users, CTRL+g now
-; -- triggers a "verbose" status mode on/off (shows old bottom status, which
-; -- was more verbose
-; - ZZ now checks to make sure doc.filepath is set - not true if just editing
-; -- a buffer
-; - make start up to edit a file or buffer more familiar
-; - added  A, I, i, 1G, G, x, dd, yy, R, r, ZZ, :q! (Sam's set)
-; - i,a now delete like vim; it was carrying a character incorrectly
-; - p,P are buggy, "pastes the line in minus the whitespace at the start"
-; - g leaves reverse character
-; - O bug when on line 1
-; - on clean exit, turn ISO
-; - added Y
-; - delete swap file after saving
-; - get crash and monitor prompt at the end of the document in some case;
-; -- need to figure out how to reproduce it (haven't gotten it in a while)
-; - fixed issue where I,i,a,A were not preserving vim's behavior to not delete
-; -- the cursor character when it hit the left most margin while in nav mode
+; See CHANGELOG
 
 %zeropage basicsafe
 %option no_sysinit
@@ -77,9 +54,9 @@ mode {
 
 flags {
   ; display flags
-  bool        BUFFER_ONLY     = true
   bool        UNSAVED         = false
   bool        VERBOSE_STATUS  = false
+  bool        FIRST_COMMAND   = true
 }
 
 view {
@@ -210,33 +187,32 @@ command {
   ubyte col, row
 
   sub prompt () {
-     ubyte cmdchar
-     cursor.hide()
-     void strings.copy(" " * 60, cmdBuffer)
-     txt.plot(0, view.FOOTER_LINE) ; move cursor to the starting position for writing
-     main.prints(view.BLANK_LINE79)
-     txt.plot(0, view.FOOTER_LINE)
-     txt.print(":")
-     CMDINPUT:
-       void, cmdchar = cbm.GETIN()
-       if cmdchar != $0d { ; any character now but <ENTER>
-         if cmdchar == $22 {
-           cbm.CHROUT($80)
-         }
-         txt.chrout(cmdchar)
-       }
-       else {
-
-         ; reads in the command and puts it into view.cmdBuffer for additional
-         ; processing in the view code
-         ubyte i
-         for i in 0 to strings.length(cmdBuffer) - 1 {
-           cmdBuffer[i] = txt.getchr(i+1, view.FOOTER_LINE)
-         }
-         strings.strip(command.cmdBuffer)
-         return;
-       }
-     goto CMDINPUT
+    ubyte cmdchar
+   cursor.hide()
+    void strings.copy(" " * 60, cmdBuffer)
+    txt.plot(0, view.FOOTER_LINE) ; move cursor to the starting position for writing
+    main.prints(view.BLANK_LINE79)
+    txt.plot(0, view.FOOTER_LINE)
+    txt.print(":")
+  CMDINPUT:
+    void, cmdchar = cbm.GETIN()
+    if cmdchar != $0d { ; any character now but <ENTER>
+      if cmdchar == $22 {
+        cbm.CHROUT($80)
+      }
+      txt.chrout(cmdchar)
+    }
+    else {
+      ; reads in the command and puts it into view.cmdBuffer for additional
+      ; processing in the view code
+      ubyte i
+      for i in 0 to strings.length(cmdBuffer) - 1 {
+        cmdBuffer[i] = txt.getchr(i+1, view.FOOTER_LINE)
+      }
+      strings.strip(command.cmdBuffer)
+      return;
+    }
+    goto CMDINPUT
   }
 
   sub process() {
@@ -257,28 +233,46 @@ command {
     str fn1 = " " * 60
 
     strings.slice(cmd, cmd_offset, cmd_length-cmd_offset, fn1) ; <- somehow this is affecting main.lineCount ...
-
     strings.strip(fn1) ; prep filename
+
+    ; catch wq, wq!
+    if cmd_length <= 4 and strings.compare(cmd, "wq") == 0 or strings.compare(cmd, "wq!") == 0 {
+      main.save_current_file() 
+      txt.clear_screenchars($20)
+      txt.iso_off()
+      sys.exit(0)
+    }
 
     when command.cmdBuffer[0] {
       'e' -> {
-        if flags.UNSAVED == true and not force {
+        if flags.FIRST_COMMAND == false and flags.UNSAVED == true and not force {
           main.warn("Unsaved changes exist.")
-          return
+          return ; jumps back to caller
         }
-        else if strings.length(fn1) > 0 {
-          main.load_file(fn1)
-          main.draw_initial_screen()
-          cursor.place(view.LEFT_MARGIN, view.TOP_LINE)
+        flags.FIRST_COMMAND = false
+        if strings.length(fn1) > 0 {
+          if ( main.load_file(fn1) ) {
+            flags.UNSAVED = false
+            main.draw_initial_screen()
+            main.toggle_nav()
+            cursor.place(view.LEFT_MARGIN, view.TOP_LINE)
+            main.update_tracker()
+            goto main.start.NAVCHARLOOP  ; start main loop
+          }
+          ; even if ":e! non-existent-file", do not replace current content with empty buffer
+          else if flags.UNSAVED == true {
+            cursor.place(view.c(), view.r())
+            main.update_tracker()
+            goto main.start.NAVCHARLOOP  ; start main loop
+          }
         }
-        else {
-          main.init_empty_buffer(1)
-          main.start.char = 'R'
-          flags.UNSAVED = true
-          main.update_tracker()
-        }
-        main.MODE = mode.NAV
-        goto main.start.NAVCHARLOOP
+        main.init_empty_buffer(1)
+        main.start.char = 'R'
+        flags.UNSAVED = true
+        main.toggle_nav()
+        cursor.place(view.LEFT_MARGIN, view.TOP_LINE)
+        main.update_tracker()
+        goto main.start.SKIP_NAVCHARLOOP ; will process 'R' and start in REPLACE mode
       }
       'q' -> {
         if flags.UNSAVED == true and not force {
@@ -292,6 +286,12 @@ command {
         }
       }
       'w' -> {
+        if flags.FIRST_COMMAND == true and flags.UNSAVED == true and not force {
+          main.warn("Nothing to save!")
+          goto main.start.FIRST_OPEN  ; start main loop
+          return
+        }
+        flags.FIRST_COMMAND = false
         ; 'w' is for "write" - fn1 is the filename
         if strings.length(fn1) > 0 {
           if diskio.exists(fn1) and not force {
@@ -315,6 +315,10 @@ command {
             main.save_current_file()
           }
         }
+      }
+      else -> {
+        cursor.place(view.LEFT_MARGIN, view.TOP_LINE)
+        main.warn("Not an editor command!")
       }
     }
   }
@@ -440,17 +444,17 @@ main {
     }
     flags.UNSAVED = true
     main.draw_screen()
-    txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
-    cursor.place(view.c(), view.r())
+    cursor.place(view.LEFT_MARGIN, view.TOP_LINE)
+    main.printLineNum(1)
   }
 
-  sub load_file(str filepath) {
+  sub load_file(str filepath) -> bool {
     strings.strip(filepath)
     txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
 
     if not diskio.exists(filepath) {
       warn("File does not exist!")
-      return
+      return false
     }
 
     info("Loading file ...")
@@ -502,13 +506,13 @@ main {
       diskio.f_close()
       txt.clear_screen()
       void strings.copy(filepath,doc.filepath)
-      flags.BUFFER_ONLY = false
     }
     else {
       diskio.f_close()
       warn("Can't open file!")
-      splash()
+      return false
     }
+    return true
   }
 
   sub splash() {
@@ -618,7 +622,6 @@ main {
     diskio.f_close_w()
 
     flags.UNSAVED     = false
-    flags.BUFFER_ONLY = false
     info_noblock("          ")
   }
 
@@ -644,8 +647,6 @@ main {
     main.MODE = mode.INIT
 
     sys.wait(20)
-    ;load_file("sample6.txt")
-    ;draw_initial_screen()
 
     ubyte char = 0
     ubyte col
@@ -653,6 +654,10 @@ main {
 
     ;txt.plot(0,1)
     ;cursor.place(view.LEFT_MARGIN, view.TOP_LINE)
+
+    FIRST_OPEN: 
+    flags.FIRST_COMMAND = true
+
     splash()
 
     ; this is the main loop
@@ -680,19 +685,18 @@ main {
             main.printLineNum(1)
             main.update_tracker()
           }
-          ':'  -> { 
-            toggle_nav()
-            flags.UNSAVED = false
-            main.clear_splash()
-            goto EVAL_COMMAND
+          ':'  -> {
+            flags.FIRST_COMMAND = true
+            command.prompt()        ; populates command.cmdBuffer
+            goto PROCESS_COMMAND
           }
         }
 
         ; "goto" dispatcher on edit or command modes
         when char {
-          'R'  -> { goto RLOOP2      }
-          'i'  -> { goto ILOOP       }
-          'a'  -> { goto ALOOP       }
+          'R'  -> { goto RLOOP2 }
+          'i'  -> { goto ILOOP  }
+          'a'  -> { goto ALOOP  }
         }
         goto NAVCHARLOOP
       }
@@ -707,24 +711,16 @@ main {
           }
           main.update_tracker()
         }
-        $3a -> {       ; ':',  mode
-          EVAL_COMMAND:
-
+        ':' -> {                         ; command line
           if main.MODE == mode.NAV {
-
             command.prompt()             ; populates command.cmdBuffer
 
             PROCESS_COMMAND:
-
             ; clear command line
             txt.plot(0, view.FOOTER_LINE)
             prints(view.BLANK_LINE79)
             main.update_tracker()
-
-            SKIP_COMMANDPROMPT:          ; simulate keyboard input by setting cursor.commandBuffer, goto here
-
             command.process()
-            
           }
 
           ;debug.assert(main.lineCount, 93, debug.EQ, "ln 515 ... main.lineCount == 93")
@@ -1587,7 +1583,6 @@ main {
         strings.rstrip(tmp)
         prints(tmp)
         txt.plot(view.LEFT_MARGIN, r+1)
-
 
         ; get next Line
         line = line.next
