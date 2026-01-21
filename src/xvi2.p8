@@ -11,26 +11,25 @@
 ; - implement a proper commandline parser
 ; - add fast "scroll_down" on in 'R' and hit 'enter' (currently way to slow
 ; -- when it hits draw_screen() on new buffer)
+; - :set number / :set nonumber (turns line numbers on/off)
 
 ; ONGOING:
 ; - regression testing
-; - verify as part of that, "~" is not present at the start in some cases, fix that
 
 ; FUTURE TODO:
-; - add checks around wq, wq! (buffer, first command?)
-; - :/ (requested by Sam)
-; - :set number / :set nonumber (turns line numbers on/off)
-; - wq! - force save, force save and quit
+; - ":/" (requested by Sam)
 ; - allow many more lines (convert Line to use str instead permanent line)
 ; - do not write contiguous spaces (fully blank line, trim when writing)
 ; -- this might be an optimization that is needed when we increase line
 ; -- support > 140
-;
 ; - stack based "undo" (p/P, o/O, dd)
 ; - fast "save_line_buffer"
 
 ; DONE:
-; See CHANGELOG
+; - verify as part of that, "~" is not present at the start in some cases, fix that
+; - wq! - force save, force save and quit
+; - add checks around wq, wq! (buffer, first command?)
+; See CHANGELOG for the rest
 
 %zeropage basicsafe
 %option no_sysinit
@@ -253,7 +252,9 @@ command {
         if strings.length(fn1) > 0 {
           if ( main.load_file(fn1) ) {
             flags.UNSAVED = false
-            main.draw_initial_screen()
+            view.CURR_TOP_LINE = 1
+            main.MODE = mode.NAV
+            main.draw_screen()
             main.toggle_nav()
             cursor.place(view.LEFT_MARGIN, view.TOP_LINE)
             main.update_tracker()
@@ -1460,28 +1461,6 @@ main {
     txt.plot(c, view.r())
   }
 
-  sub draw_initial_screen () {
-      uword addr = view.INDEX[0]
-      ubyte i = main.lineCount as ubyte ; won't be used if > view.HEIGHT
-      ; catch docs that go beyond screen
-      if main.lineCount > view.HEIGHT {
-        i = view.HEIGHT
-      }
-      txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
-      ubyte r = view.TOP_LINE
-      uword lineNum = 1
-      repeat i {
-        txt.plot(0, r)
-        main.printLineNum(lineNum)
-        txt.plot(view.LEFT_MARGIN,r)
-        ^^Line line = addr
-        prints(line.text)
-        addr = line.next
-        r++
-        lineNum++
-      }
-  }
-
   sub draw_screen () {               ; NOTE: assumes view.CURR_TOP_LINE is correct
       info_noblock("             ")
       ubyte idx = (view.CURR_TOP_LINE as ubyte) - 1
@@ -1498,7 +1477,7 @@ main {
         m = remaining as ubyte
         n = (view.HEIGHT - remaining) as ubyte
       }
-      uword lineNum = view.CURR_TOP_LINE
+      uword lineNum = idx + 1
       str tmp = " " *main.MaxLength
       repeat m {
         r = view.r()
