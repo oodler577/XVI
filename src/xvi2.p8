@@ -696,7 +696,7 @@ main {
         when char {
           'R'  -> { goto RLOOP2 }
           'i'  -> { goto ILOOP  }
-          'a'  -> { goto ALOOP  }
+          'a'  -> { goto ILOOP  }
         }
         goto NAVCHARLOOP
       }
@@ -857,9 +857,9 @@ main {
             main.update_tracker()
           }
         }
-        'a' -> { ; append after cursor (vim-like)
+        'a','i' -> { ; append after cursor (vim-like)
           if main.MODE == mode.NAV {
-            ASTART:
+            ISTART:
             ; move one char right before inserting (append-after-cursor)
             ubyte ac = view.c()
             ubyte ar = view.r()
@@ -867,7 +867,12 @@ main {
               ac = view.LEFT_MARGIN
             }
             if ac < view.RIGHT_MARGIN-1 {
-              cursor.place(ac+1, ar)
+              if char == 'a' {
+                cursor.place(ac+1, ar)
+              }
+              else if char == 'i' {
+                cursor.place(ac, ar)
+              }
             }
             else {
               cursor.place(view.RIGHT_MARGIN-1, ar)
@@ -876,89 +881,13 @@ main {
             main.MODE = mode.INSERT
             main.update_tracker()
 
-            ALOOP:
-            main.MODE = mode.INSERT
-            void, char = cbm.GETIN()
-            if char == $00 {
-              goto ALOOP
-            }
-
-            when char {
-              $1b -> {       ; <esc>
-                toggle_nav()
-                main.save_line_buffer()
-                goto NAVCHARLOOP
-              }
-              $0d -> {       ; <return> == esc + 'o'
-                toggle_nav()
-                main.save_line_buffer()
-                char = $6f ; 'o'
-                goto SKIP_NAVCHARLOOP
-              }
-              $14, $08, $7f -> {  ; backspace variants (DEL/BS)
-                goto ABACKSPACE
-              }
-              else -> {
-                ; only accept printable ISO range
-                if char < 32 or char > 126 {
-                  goto ALOOP
-                }
-        ; not sure why this is not needed ..
-        ; .... ; if it's a double-quote, clear quote mode first for compatibility
-        ;        if char == $22 {
-        ;          cbm.CHROUT($80)
-        ;        }
-                goto AINSERTCHAR
-              }
-            }
-            goto ALOOP
-
-            ABACKSPACE:
-            ; delete char to the left (vim-ish insert backspace)
-            if view.c() <= view.LEFT_MARGIN {
-              ; this preserves the behavior of vim when in insert mode
-              ; and hitting backspace, runs into the left margin, nothing
-              ; is done
-              goto ALOOP
-            }
-            cursor.saved_char = $20
-            cursor.restore_current_char();
-            txt.plot(view.c()-1, view.r())
-            cursor.place(view.c(), view.r())
-            main.delete_xy_shift_left()
-            main.update_tracker()
-            goto ALOOP
-
-            AINSERTCHAR:
-            ; keep cursor within editable region
-            if view.c() < view.LEFT_MARGIN {
-              txt.plot(view.LEFT_MARGIN, view.r())
-              cursor.place(view.c(),view.r())
-              main.update_tracker()
-              goto ALOOP
-            }
-            if view.c() == view.RIGHT_MARGIN {
-              txt.plot(view.RIGHT_MARGIN-1, view.r())
-              cursor.place(view.c(),view.r())
-              main.update_tracker()
-              goto ALOOP
-            }
-            main.insert_char_shift_right(char)
-            cursor.place(view.c()+1,view.r())
-            main.update_tracker()
-            goto ALOOP
-          }
-        }
-        'i' -> { ; insert at cursor (vim-like)
-          if main.MODE == mode.NAV {
-            main.MODE = mode.INSERT
-            main.update_tracker()
             ILOOP:
             main.MODE = mode.INSERT
             void, char = cbm.GETIN()
             if char == $00 {
               goto ILOOP
             }
+
             when char {
               $1b -> {       ; <esc>
                 toggle_nav()
@@ -1093,6 +1022,7 @@ main {
           if main.MODE == mode.NAV {
             jump_to_left()
             if char == 'I' {
+              char = 'i'
               goto ILOOP ; go now into insert mode
             }
           }
@@ -1101,7 +1031,8 @@ main {
           if main.MODE == mode.NAV {
             jump_to_right()
             if char == 'A' {
-              goto ASTART ; go now into insert mode
+              char = 'a'
+              goto ISTART ; go now into insert mode
             }
           }
         }
