@@ -287,7 +287,7 @@ command {
         }
       }
       'w' -> {
-        if flags.FIRST_COMMAND == true and flags.UNSAVED == true and not force {
+        if flags.FIRST_COMMAND == true and flags.UNSAVED == false and not force {
           main.warn("Nothing to save!")
           goto main.start.FIRST_OPEN  ; start main loop
           return
@@ -332,7 +332,7 @@ main {
 
   struct Document {
     ubyte tabNum    ; 0
-    ubyte charset   ; 0 = ISO, 1 = PETSCI
+    ubyte charset   ; 0 = ISO, 1 = PETSCII
     ubyte startBank ; actual bank number for switching
     uword firstLine ; address of the first line of the document
     uword lineCount ; number of lines
@@ -383,9 +383,9 @@ main {
   ; by MarkTheStrange on #prog8-dev
   sub allocLine(^^ubyte initial) -> ^^Line {
     ^^Line this = next                   ; return next space
-    next += 1                            ; advance to end of struct
-    uword txtbuf = next as uword         ; use space after struct as buffer for text
-    next = next as uword + MaxLength + 1 ; and advance past buffer space
+    ; don't run past end of Buffer
+    if next > (Buffer+BufferSize-LineSize) return $0000
+    next += 1                            ; advance by sizeof struct
     ; link the new line in
     if head == 0 {
         head = this
@@ -396,7 +396,7 @@ main {
     ; populate the fields
     this.prev = tail
     this.next = 0
-    this.text = txtbuf
+    this.text = &this.data00            ; text buffer embedded in struct
     void strings.copy(initial, this.text)
     @(this.text + MaxLength) = 0         ; null terminate
 
@@ -407,13 +407,13 @@ main {
 
   sub allocNewLine(^^ubyte initial) -> ^^Line {
     ^^Line this = next                   ; return next space
-    next += 1                            ; advance to end of struct
-    uword txtbuf = next as uword         ; use space after struct as buffer for text
-    next = next as uword + MaxLength + 1 ; and advance past buffer space
+    ; don't run past end of Buffer
+    if next > (Buffer+BufferSize-LineSize) return $0000
+    next += 1                            ; advance by sizeof struct
     ; populate the fields
     this.prev = 0
     this.next = 0
-    this.text = txtbuf
+    this.text = &this.data00            ; text buffer embedded in struct
     strings.rstrip(initial)
     void strings.copy(view.BLANK_LINE79, this.text) ; initialize with BLANK_LINE79, eliminates random garbage
     void strings.copy(initial, this.text); then add text
@@ -500,6 +500,8 @@ main {
         }
 
         uword lineAddr = allocLine(lineBuffer)
+        ; out of memory == $0000, stop reading.
+        if lineAddr == $0000 break
         idx = main.lineCount as ubyte
         view.INDEX[idx] = lineAddr
         main.lineCount++
@@ -1134,6 +1136,10 @@ main {
     ^^Line old_prev  = 0
     ^^Line copy_addr = view.CLIPBOARD
     ^^Line new_prev  = main.allocNewLine(copy_addr.text)
+    if new_prev == $0000 {
+        warn("Out of memory!")
+        return
+    }
 
     if curr_line > 1 {
       old_prev = view.INDEX[(curr_line as ubyte) - 2]
@@ -1187,6 +1193,10 @@ main {
     ^^Line curr_addr = get_Line_addr(r)        ; gets memory addr of current Line
     ^^Line copy_addr = view.CLIPBOARD
     ^^Line new_next  = main.allocNewLine(copy_addr.text) ; new line with text from copied address
+    if new_next == $0000 {
+        warn("Out of memory!")
+        return
+    }
 
     new_next.prev  = curr_addr
     new_next.next  = curr_addr.next
@@ -1230,6 +1240,10 @@ main {
     ^^Line curr_addr = get_Line_addr(r)
     ^^Line old_prev  = 0
     ^^Line new_prev  = main.allocNewLine("  ")
+    if new_prev == $0000 {
+        warn("Out of memory!")
+        return
+    }
 
     if curr_line > 1 {
       old_prev = view.INDEX[(curr_line as ubyte) - 2]
@@ -1281,6 +1295,10 @@ main {
 
     ^^Line curr_addr = get_Line_addr(r)        ; gets memory addr of current Line
     ^^Line new_next  = main.allocNewLine("  ") ; creates new Line instance to insert
+    if new_next == $0000 {
+        warn("Out of memory!")
+        return
+    }
 
     new_next.prev  = curr_addr
     new_next.next  = curr_addr.next
