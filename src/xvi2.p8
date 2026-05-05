@@ -249,7 +249,7 @@ command {
 
     ; catch wq, wq!
     if cmd_length <= 4 and strings.compare(cmd, "wq") == 0 or strings.compare(cmd, "wq!") == 0 {
-      main.save_current_file() 
+      main.save_current_file()
       txt.clear_screenchars($20)
       txt.iso_off()
       sys.exit(0)
@@ -682,7 +682,7 @@ main {
     ;txt.plot(0,1)
     ;cursor.place(view.LEFT_MARGIN, view.TOP_LINE)
 
-    FIRST_OPEN: 
+    FIRST_OPEN:
     flags.FIRST_COMMAND = true
 
     splash()
@@ -1424,15 +1424,6 @@ main {
   }
 
   sub do_dd() {
-    if main.lineCount < 2 {
-      txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
-      prints(view.BLANK_LINE76)
-      txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
-      return
-    }
-
-    info("cut")
-
     ubyte c = view.c()
     ubyte r = view.r()
 
@@ -1461,7 +1452,10 @@ main {
       txt.plot(view.LEFT_MARGIN, r)
       cursor.replace(view.LEFT_MARGIN, r)
       main.update_tracker()
+      return
     }
+
+    info("cut")
 
     ^^Line curr_addr = get_Line_addr(r) ; line being deleted
     ^^Line prev_addr = curr_addr.prev   ; line before line being deleted
@@ -1471,7 +1465,7 @@ main {
     if prev_addr != 0 {
       prev_addr.next = next_addr
     }
-    if next_addr != 0 {                   ; make sure curr_line is not last line of doc
+    if next_addr != 0 {
       next_addr.prev = prev_addr
     }
 
@@ -1482,11 +1476,11 @@ main {
 
     draw_screen()
 
-    view.CLIPBOARD   = curr_addr ; save deleted address to clipboard for later pasting
+    view.CLIPBOARD = curr_addr ; save deleted address to clipboard for later pasting
 
     flags.UNSAVED = true
 
-    ; If we deleted the last document line, move cursor up one screen row (if possible)
+    ; If we deleted the last document line, move cursor up one screen row if possible
     if deleted_line > main.lineCount {
       if r > view.TOP_LINE {
         r = r - 1
@@ -1743,7 +1737,7 @@ main {
     ubyte curr_line = view.r()
     ubyte curr_col  = view.c()
     ubyte next_line = curr_line-1;
-    ubyte curr_end  = get_end_col(view.c())
+    ubyte curr_end  = get_end_col(curr_line)
     ubyte next_col  = curr_col
     ubyte next_end  = get_end_col(next_line)
 
@@ -1795,7 +1789,7 @@ main {
     ubyte curr_line = view.r()
     ubyte curr_col  = view.c()
     ubyte next_line = curr_line + 1
-    ubyte curr_end  = get_end_col(view.c())
+    ubyte curr_end  = get_end_col(curr_line)
     ubyte next_col  = curr_col
     ubyte next_end  = get_end_col(next_line)
 
