@@ -249,7 +249,7 @@ command {
 
     ; catch wq, wq!
     if cmd_length <= 4 and strings.compare(cmd, "wq") == 0 or strings.compare(cmd, "wq!") == 0 {
-      main.save_current_file()
+      main.save_current_file() 
       txt.clear_screenchars($20)
       txt.iso_off()
       sys.exit(0)
@@ -682,7 +682,7 @@ main {
     ;txt.plot(0,1)
     ;cursor.place(view.LEFT_MARGIN, view.TOP_LINE)
 
-    FIRST_OPEN:
+    FIRST_OPEN: 
     flags.FIRST_COMMAND = true
 
     splash()
@@ -1162,7 +1162,33 @@ main {
     return curr_line
   }
 
+  sub screen_row_has_doc_line(ubyte r) -> bool {
+    if r < view.TOP_LINE or r > view.BOTTOM_LINE {
+      return false
+    }
+
+    uword docLine = main.get_line_num(r)
+
+    if docLine < 1 or docLine > main.lineCount {
+      return false
+    }
+
+    return true
+  }
+
+  sub doc_line_has_line(uword docLine) -> bool {
+    if docLine < 1 or docLine > main.lineCount {
+      return false
+    }
+
+    return true
+  }
+
   sub get_Line_addr(ubyte r) -> uword {
+    if not screen_row_has_doc_line(r) {
+      return 0
+    }
+
     uword curr_line = main.get_line_num(r) ; 1-based
     ubyte idxw = (curr_line as ubyte) - 1  ; 0-based
     return view.INDEX[idxw]                ; only OK if you guarantee idxw <= 255
@@ -1178,6 +1204,10 @@ main {
     uword curr_line = main.get_line_num(r)
 
     ^^Line curr_addr = get_Line_addr(r)
+    if curr_addr == 0 {
+      return
+    }
+
     ^^Line old_prev  = 0
     ^^Line copy_addr = view.CLIPBOARD
     ^^Line new_prev  = main.allocNewLine(copy_addr.text)
@@ -1236,6 +1266,10 @@ main {
     uword curr_line = main.get_line_num(r) ; next_line is +1
 
     ^^Line curr_addr = get_Line_addr(r)        ; gets memory addr of current Line
+    if curr_addr == 0 {
+      return
+    }
+
     ^^Line copy_addr = view.CLIPBOARD
     ^^Line new_next  = main.allocNewLine(copy_addr.text) ; new line with text from copied address
     if new_next == $0000 {
@@ -1283,6 +1317,10 @@ main {
     uword curr_line = main.get_line_num(r)
 
     ^^Line curr_addr = get_Line_addr(r)
+    if curr_addr == 0 {
+      return
+    }
+
     ^^Line old_prev  = 0
     ^^Line new_prev  = main.allocNewLine("  ")
     if new_prev == $0000 {
@@ -1339,6 +1377,10 @@ main {
     uword curr_line = main.get_line_num(r) ; next_line is +1
 
     ^^Line curr_addr = get_Line_addr(r)        ; gets memory addr of current Line
+    if curr_addr == 0 {
+      return
+    }
+
     ^^Line new_next  = main.allocNewLine("  ") ; creates new Line instance to insert
     if new_next == $0000 {
         warn("Out of memory!")
@@ -1399,6 +1441,9 @@ main {
     ubyte r = view.r()
 
     ^^Line curr_addr = get_Line_addr(r) ; line being deleted
+    if curr_addr == 0 {
+      return
+    }
 
     view.CLIPBOARD = curr_addr
 
@@ -1411,6 +1456,9 @@ main {
     ubyte r = view.r()
 
     ^^Line curr_addr = get_Line_addr(r) ; line being deleted
+    if curr_addr == 0 {
+      return
+    }
 
     ubyte i
     for i in (c-view.LEFT_MARGIN) to main.MaxLength-1 {
@@ -1437,6 +1485,10 @@ main {
     ; safety/vim-like: if only one line, clear it instead of deleting it
     if main.lineCount == 1 {
       ^^Line only_addr = get_Line_addr(r)
+      if only_addr == 0 {
+        return
+      }
+
       view.CLIPBOARD = only_addr
 
       ubyte i
@@ -1458,6 +1510,10 @@ main {
     info("cut")
 
     ^^Line curr_addr = get_Line_addr(r) ; line being deleted
+    if curr_addr == 0 {
+      return
+    }
+
     ^^Line prev_addr = curr_addr.prev   ; line before line being deleted
     ^^Line next_addr = curr_addr.next   ; line after line being deleted
 
@@ -1465,7 +1521,7 @@ main {
     if prev_addr != 0 {
       prev_addr.next = next_addr
     }
-    if next_addr != 0 {
+    if next_addr != 0 {                   ; make sure curr_line is not last line of doc
       next_addr.prev = prev_addr
     }
 
@@ -1476,11 +1532,11 @@ main {
 
     draw_screen()
 
-    view.CLIPBOARD = curr_addr ; save deleted address to clipboard for later pasting
+    view.CLIPBOARD   = curr_addr ; save deleted address to clipboard for later pasting
 
     flags.UNSAVED = true
 
-    ; If we deleted the last document line, move cursor up one screen row if possible
+    ; If we deleted the last document line, move cursor up one screen row (if possible)
     if deleted_line > main.lineCount {
       if r > view.TOP_LINE {
         r = r - 1
@@ -1634,7 +1690,14 @@ main {
   }
 
   sub get_end_col(ubyte r) -> ubyte {
+    if not screen_row_has_doc_line(r) {
+      return view.LEFT_MARGIN
+    }
+
     ^^Line curr_addr = get_Line_addr(r)
+    if curr_addr == 0 {
+      return view.LEFT_MARGIN
+    }
 
     ; Find last printable ISO byte (32..126) in the line buffer.
     ; If none, return LEFT_MARGIN.
@@ -1645,7 +1708,7 @@ main {
       if ch == 0 {
         break
       }
-      if ch >= 32 and ch <= 126 and ch != $20 {  ; treat space as not “visible”
+      if ch >= 32 and ch != $20 and ch <= 126 {  ; treat space as not “visible”
         last = i
       }
     }
@@ -1734,12 +1797,28 @@ main {
     if view.CURR_TOP_LINE == 1 and view.r() == view.TOP_LINE {
       return
     }
+
     ubyte curr_line = view.r()
     ubyte curr_col  = view.c()
-    ubyte next_line = curr_line-1;
+    ubyte next_line = curr_line-1
+
+    uword curr_docLine = view.CURR_TOP_LINE + (curr_line - view.TOP_LINE)
+    uword next_docLine = curr_docLine - 1
+
+    if not doc_line_has_line(next_docLine) {
+      return
+    }
+
     ubyte curr_end  = get_end_col(curr_line)
     ubyte next_col  = curr_col
-    ubyte next_end  = get_end_col(next_line)
+    ubyte next_end
+
+    if curr_line == view.TOP_LINE {
+      next_end = view.LEFT_MARGIN
+    }
+    else {
+      next_end = get_end_col(next_line)
+    }
 
     ; track end of line if at end of line in the curr_line
     if curr_col == curr_end or curr_col >= next_end {
@@ -1789,6 +1868,14 @@ main {
     ubyte curr_line = view.r()
     ubyte curr_col  = view.c()
     ubyte next_line = curr_line + 1
+
+    uword curr_docLine = view.CURR_TOP_LINE + (curr_line - view.TOP_LINE)
+    uword next_docLine = curr_docLine + 1
+
+    if not doc_line_has_line(next_docLine) {
+      return
+    }
+
     ubyte curr_end  = get_end_col(curr_line)
     ubyte next_col  = curr_col
     ubyte next_end  = get_end_col(next_line)
@@ -1822,14 +1909,7 @@ main {
 
       cursor.replace(next_col, curr_line)
     } else {
-      ; Only move the cursor down if there is a real document line there.
-      ; Map current screen row -> document line number:
-      ; docLine = CURR_TOP_LINE + (screenRow - TOP_LINE)
-      uword docLine = view.CURR_TOP_LINE + (curr_line - view.TOP_LINE)
-
-      if docLine < main.lineCount {
-        cursor.place(next_col, next_line)
-      }
+      cursor.place(next_col, next_line)
     }
 
     main.update_tracker()
@@ -1854,6 +1934,9 @@ main {
     ubyte r = view.r()
 
     ^^Line curr_addr = get_Line_addr(r)
+    if curr_addr == 0 {
+      return
+    }
 
     ubyte i
     for i in 0 to MaxLength-1 {
@@ -1888,6 +1971,9 @@ main {
     }
 
     ^^Line curr_addr = get_Line_addr(r)    ; gets memory addr of current Line
+    if curr_addr == 0 {
+      return
+    }
 
     ; replace char at (c,r)
     @(curr_addr.text + (c - view.LEFT_MARGIN)) = tchar
@@ -1920,6 +2006,9 @@ main {
     }
 
     ^^Line curr_addr = get_Line_addr(r)
+    if curr_addr == 0 {
+      return
+    }
 
     ubyte i
     for i in view.RIGHT_MARGIN-1 to c+1 step -1 {
@@ -1957,6 +2046,9 @@ main {
     }
 
     ^^Line curr_addr = get_Line_addr(r)    ; gets memory addr of current Line
+    if curr_addr == 0 {
+      return
+    }
 
     ; remove char at (c,r) then shift everything to the left
     @(curr_addr.text + (c - view.LEFT_MARGIN)) = $20
