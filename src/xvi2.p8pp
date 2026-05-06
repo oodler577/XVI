@@ -642,24 +642,26 @@ main {
 #endif
 
 #if TARGET_C64
-    ; C64 splash: keep it compact and PETSCII-friendly.
-    ; The editor core still initializes a one-line buffer, but the oversized
-    ; X16 intro text is avoided on the 40x25 display.
+    ; C64 splash: compact 40-column intro, PETSCII-safe.
+    ; Use lowercase character set + simple PETSCII text so the splash is
+    ; readable on stock C64/VICE without relying on ISO/X16 screen behavior.
+    txt.lowercase()
     txt.clear_screen()
     txt.plot(0,view.TOP_LINE)
     init_empty_buffer(1)
+    txt.lowercase()
     txt.clear_screen()
     txt.plot(0,view.TOP_LINE)
-    say("XVI - C64 VI")
+    say("xvi - c64 vi")
     say("")
-    say("VERSION 2.0.RC-0")
+    say("version 2.0.rc-0")
     say("")
-    say(":E FILE   LOAD FILE")
-    say(":Q        QUIT")
-    say("I         INSERT MODE")
-    say("R         REPLACE MODE")
+    say(":e file   load file")
+    say(":q        quit")
+    say("i         insert mode")
+    say("r         replace mode")
     say("")
-    say("PRESS I OR R TO START EDITING")
+    say("press i or r to start editing")
 #endif
   }
 
