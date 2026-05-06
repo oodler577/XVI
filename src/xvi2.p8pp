@@ -1,41 +1,6 @@
 ;
 ; vim:set softtabstop=2 shiftwidth=2 expandtab:
 ;
-; BUGS:
-; - dd bug
-; -- 1. open a file, immediately jump to the botton
-; -- 2. add a few lines at the bottom with 'o', typing some
-; -- 3. hit <esc>, then do "dd"
-
-; TODO:
-; - add 'dG' for (gillham)
-; - isolate remaining cursor issues
-; - get rid of full screen redraw with "dd"
-; - implement a proper commandline parser
-; - add fast "scroll_down" on in 'R' and hit 'enter' (currently way to slow
-; -- when it hits draw_screen() on new buffer)
-; - :set number / :set nonumber (turns line numbers on/off)
-
-; ONGOING:
-; - regression testing
-
-; FUTURE TODO:
-; - ":/" (requested by Sam)
-; - allow many more lines (convert Line to use str instead permanent line)
-; - do not write contiguous spaces (fully blank line, trim when writing)
-; -- this might be an optimization that is needed when we increase line
-; -- support > 140
-; - stack based "undo" (p/P, o/O, dd)
-; - fast "save_line_buffer"
-
-; DONE:
-; - added <ESC> as cancel when in command mode
-; - adding a non-supported command in command mode messed up the bottom footer,
-; - this is fixed
-; - verify as part of that, "~" is not present at the start in some cases, fix that
-; - wq! - force save, force save and quit
-; - add checks around wq, wq! (buffer, first command?)
-; See CHANGELOG for the rest
 
 %zeropage basicsafe
 %option no_sysinit
