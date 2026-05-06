@@ -219,6 +219,7 @@ command {
     txt.print(":")
   CMDINPUT:
     void, cmdchar = cbm.GETIN()
+    cmdchar = main.normalize_key(cmdchar)
     if cmdchar == $1b {  ; ESC key, get out of command mode
       txt.plot(0, view.FOOTER_LINE) ; move cursor to the starting position for writing
       main.prints(view.BLANK_LINE79)
@@ -421,7 +422,13 @@ main {
 
   ^^Document doc
 
+#if TARGET_X16
   const uword MaxLength  = 76
+#endif
+#if TARGET_C64
+  ; C64 visible editable width: 40 columns minus 4-column gutter.
+  const uword MaxLength  = 36
+#endif
   const uword LineSize   = sizeof(Line)
 
   const uword MaxLines   = 256
@@ -741,6 +748,21 @@ main {
   ubyte row
   ubyte numbers
 
+  sub normalize_key(ubyte k) -> ubyte {
+#if TARGET_C64
+    ; C64 physical left-arrow key near 1: use as editor ESC/cancel.
+    if k == $5f {
+      return $1b
+    }
+
+    ; C64 RUN/STOP: also use as editor ESC/cancel, useful in VICE/dev.
+    if k == $03 {
+      return $1b
+    }
+#endif
+    return k
+  }
+
   sub start () {
 #if TARGET_X16
     txt.iso()
@@ -771,6 +793,7 @@ main {
     repeat {
     NAVCHARLOOP:
         char = cbm.GETIN2()
+        char = normalize_key(char)
         navchar_start()
         if char == $00 continue
     SKIP_NAVCHARLOOP:
@@ -939,6 +962,7 @@ main {
       'r' -> { ; replace char
         RLOOP1:
         void, char = cbm.GETIN()
+        char = normalize_key(char)
         ; go back to RLOOP1 if there's nothing input via keyboard
         if char == $00 {
           goto RLOOP1
@@ -966,6 +990,7 @@ main {
         RLOOP2:
         main.MODE = mode.REPLACE
         void, char = cbm.GETIN()
+        char = normalize_key(char)
         if char == $00 {
           goto RLOOP2
         }
@@ -1074,6 +1099,7 @@ main {
         ILOOP:
         main.MODE = mode.INSERT
         void, char = cbm.GETIN()
+        char = normalize_key(char)
         if char == $00 {
           goto ILOOP
         }
@@ -1198,6 +1224,7 @@ main {
         ILOOP:
         main.MODE = mode.INSERT
         void, char = cbm.GETIN()
+        char = normalize_key(char)
         if char == $00 {
           goto ILOOP
         }
@@ -1968,7 +1995,7 @@ main {
     txt.plot(view.LEFT_MARGIN,r)
     prints(view.BLANK_LINE76)
     txt.plot(view.LEFT_MARGIN,r)
-    str tmp = " " * 76 ; main.MaxLength
+    str tmp = " " * main.MaxLength
     void strings.copy(addr.text, tmp)
     strings.rstrip(tmp) ; <- to get rid of straw CR or LF, but is this necessary?
     prints(tmp)
