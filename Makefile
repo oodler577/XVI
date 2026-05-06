@@ -6,7 +6,7 @@ JAR     ?= $(ROOT)/prog8c-12.0.1-all.jar
 PROG8C  := $(JAVA) -jar "$(JAR)"
 
 EMU_X16 ?= x16emu
-EMU_C64 ?= x64sc
+EMU_C64 ?= /c/tools/vice/SDL2VICE-3.10-win64/x64sc.exe
 OPT     ?=
 
 SRC     := src/xvi2.p8pp
@@ -69,7 +69,7 @@ trace-x16: x16
 	$(EMU_X16) -scale 2 -prg build/x16/$(NAME)-x16.prg -run -trace
 
 run-c64: c64
-	$(EMU_C64) build/c64/$(NAME)-c64.prg
+	$(EMU_C64) -autostart "$(CURDIR)/build/c64/$(NAME)-c64.prg"
 
 debug-c64: c64
 	$(EMU_C64) -moncommands build/c64/$(NAME)-c64.vice-mon-list build/c64/$(NAME)-c64.prg

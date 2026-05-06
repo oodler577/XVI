@@ -50,15 +50,6 @@
 #ifndef TARGET_C64
 #define TARGET_C64 0
 #endif
-#ifndef TARGET_C64_REU
-#define TARGET_C64_REU 0
-#endif
-#ifndef TARGET_VIC20
-#define TARGET_VIC20 0
-#endif
-#ifndef TARGET_ATARI800
-#define TARGET_ATARI800 0
-#endif
 
 %import textio
 %import strings
@@ -105,8 +96,19 @@ view {
   const ubyte BOTTOM_LINE     = 22
   const ubyte FOOTER_LINE     = 24
 #endif
+
+#if TARGET_X16
+  ; Full line width, and editable line width without the gutter.
   str         BLANK_LINE79    = " " * 79
   str         BLANK_LINE76    = " " * 76
+#endif
+
+#if TARGET_C64
+  ; Full line width, and editable line width without the gutter.
+  ; Names remain legacy/X16-shaped so the editor core does not change yet.
+  str         BLANK_LINE79    = " " * 39
+  str         BLANK_LINE76    = " " * 36
+#endif
   uword       CURR_TOP_LINE   = 1  ; tracks which actual doc line is at TOP_LINE
   uword[main.MaxLines] INDEX       ; Line to address look up
   uword       CLIPBOARD       = 0  ; holds the address of the current line we can "paste"
@@ -190,6 +192,9 @@ cursor {
 #if TARGET_X16
       cbm.CHROUT($80)
 #endif
+#if TARGET_C64
+      ; C64: no X16 ISO quote-mode escape needed here.
+#endif
     }
     txt.chrout(saved_char)
     txt.plot(c,r)
@@ -208,6 +213,9 @@ cursor {
     if saved_char == $22 {
 #if TARGET_X16
       cbm.CHROUT($80)
+#endif
+#if TARGET_C64
+      ; C64: no X16 ISO quote-mode escape needed here.
 #endif
     }
     txt.chrout(saved_char)
@@ -250,6 +258,9 @@ command {
   #if TARGET_X16
       cbm.CHROUT($80)
 #endif
+#if TARGET_C64
+      ; C64: no X16 ISO quote-mode escape needed here.
+#endif
       }
       txt.chrout(cmdchar)
     }
@@ -291,6 +302,9 @@ command {
       main.save_current_file() 
       txt.clear_screenchars($20)
 #if TARGET_X16
+      txt.iso_off()
+#endif
+#if TARGET_C64
       txt.iso_off()
 #endif
       sys.exit(0)
@@ -336,7 +350,13 @@ command {
         }
         else {
           txt.clear_screenchars($20)
-    #if TARGET_X16
+#if TARGET_X16
+      txt.iso_off()
+#endif
+#if TARGET_C64
+      txt.iso_off()
+#endif
+#if TARGET_C64
       txt.iso_off()
 #endif
           sys.exit(0)
@@ -716,6 +736,9 @@ main {
 #if TARGET_X16
     txt.iso()
 #endif
+#if TARGET_C64
+    txt.iso()
+#endif
     doc.tabNum               = 0 ; for future proofing
     doc.charset              = 0 ; for future proofing
     doc.startBank            = 1 ; for future proofing
@@ -885,7 +908,13 @@ main {
           }
           save_current_file()
           txt.clear_screenchars($20)
-    #if TARGET_X16
+#if TARGET_X16
+      txt.iso_off()
+#endif
+#if TARGET_C64
+      txt.iso_off()
+#endif
+#if TARGET_C64
       txt.iso_off()
 #endif
           sys.exit(0)
@@ -959,6 +988,9 @@ main {
         #if TARGET_X16
       cbm.CHROUT($80)
 #endif
+#if TARGET_C64
+      ; C64: no X16 ISO quote-mode escape needed here.
+#endif
             }
             flags.UNSAVED = true
             goto RPUTCHAR
@@ -982,7 +1014,8 @@ main {
         cursor.saved_char = txt.getchr(view.c()+1,view.r())
 #if TARGET_X16
         cbm.CHROUT(char)
-#else
+#endif
+#if TARGET_C64
         txt.chrout(char)
 #endif
         flags.UNSAVED = true
@@ -1109,6 +1142,15 @@ main {
 
 #if TARGET_X16
       ; X16 raw CBM cursor and control-key aliases.
+      $91 -> cursor_up_on_k()                    ; UP
+      $11 -> cursor_down_on_j()                  ; DOWN
+      $9d, $14, $08 -> cursor_left_on_h()        ; LEFT/backspace variants
+      $20, $1d -> cursor_right_on_l()            ; SPACE/right arrow
+      $06,$46 -> page_forward()                  ; ctrl+f / shift+f
+      $02,$42 -> page_backward()                 ; ctrl+b / shift+b
+#endif
+#if TARGET_C64
+      ; C64 raw CBM cursor and control-key aliases.
       $91 -> cursor_up_on_k()                    ; UP
       $11 -> cursor_down_on_j()                  ; DOWN
       $9d, $14, $08 -> cursor_left_on_h()        ; LEFT/backspace variants
@@ -1889,7 +1931,8 @@ main {
 
 #if TARGET_X16
       txt.scroll_up()
-#else
+#endif
+#if TARGET_C64
       txt.scroll_up(false)
 #endif
       draw_bottom_line(view.CURR_TOP_LINE + view.HEIGHT - 1)
