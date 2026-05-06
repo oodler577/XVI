@@ -79,8 +79,16 @@ debug-c64: c64
 trace-c64: c64
 	$(EMU_C64) -console build/c64/$(NAME)-c64.prg
 
-run-c128: c128
-	$(EMU_C128) -80col -autostart "$(CURDIR)/build/c128/$(NAME)-c128.prg"
+C1541 ?= /c/tools/vice/SDL2VICE-3.10-win64/c1541.exe
+EMU_C128 ?= /c/tools/vice/SDL2VICE-3.10-win64/x128.exe
+
+d64-c128: c128
+	rm -f build/c128/$(NAME)-c128.d64
+	$(C1541) -format xvi,00 d64 build/c128/$(NAME)-c128.d64 \
+		-write build/c128/$(NAME)-c128.prg $(NAME)-c128
+
+run-c128: d64-c128
+	$(EMU_C128) -80col -8 "$(CURDIR)/build/c128/$(NAME)-c128.d64"
 
 debug-c128: c128
 	$(EMU_C128) -80col -moncommands build/c128/$(NAME)-c128.vice-mon-list build/c128/$(NAME)-c128.prg

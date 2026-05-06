@@ -244,6 +244,7 @@ command {
     txt.print(":")
   CMDINPUT:
     void, cmdchar = cbm.GETIN()
+    cmdchar = main.normalize_key(cmdchar)
     if cmdchar == $1b {  ; ESC key, get out of command mode
       txt.plot(0, view.FOOTER_LINE) ; move cursor to the starting position for writing
       main.prints(view.BLANK_LINE79)
@@ -302,7 +303,7 @@ command {
 #if TARGET_X16
       txt.iso_off()
 #endif
-#if TARGET_C64
+#if TARGET_C64 || TARGET_C128
       txt.iso_off()
 #endif
       sys.exit(0)
@@ -351,10 +352,7 @@ command {
 #if TARGET_X16
       txt.iso_off()
 #endif
-#if TARGET_C64
-      txt.iso_off()
-#endif
-#if TARGET_C64
+#if TARGET_C64 || TARGET_C128
       txt.iso_off()
 #endif
           sys.exit(0)
@@ -446,7 +444,12 @@ main {
 
   ^^Document doc
 
+#if TARGET_X16 || TARGET_C128
   const uword MaxLength  = 76
+#endif
+#if TARGET_C64
+  const uword MaxLength  = 36
+#endif
   const uword LineSize   = sizeof(Line)
 
   const uword MaxLines   = 256
@@ -656,23 +659,23 @@ main {
 
 #if TARGET_C128
     ; C128 splash: initial 80-column VICE bring-up, PETSCII-safe.
-    txt.lowercase()
+    ; Keep this deliberately simple: no charset switching yet, no VDC-specific
+    ; assumptions beyond the target geometry above.
     txt.clear_screen()
     txt.plot(0,view.TOP_LINE)
     init_empty_buffer(1)
-    txt.lowercase()
     txt.clear_screen()
     txt.plot(0,view.TOP_LINE)
-    say("xvi - c128 80 column vi")
+    say("XVI - C128 80 COLUMN VI")
     say("")
-    say("version 2.0.rc-0")
+    say("VERSION 2.0.RC-0")
     say("")
-    say(":e file   load file")
-    say(":q        quit")
-    say("i         insert mode")
-    say("r         replace mode")
+    say(":E FILE   LOAD FILE")
+    say(":Q        QUIT")
+    say("I         INSERT MODE")
+    say("R         REPLACE MODE")
     say("")
-    say("initial c128 bring-up")
+    say("INITIAL C128 BRING-UP")
 #endif
   }
 
@@ -796,14 +799,29 @@ main {
   ubyte row
   ubyte numbers
 
+  sub normalize_key(ubyte k) -> ubyte {
+#if TARGET_C64 || TARGET_C128
+    ; CBM physical left-arrow key near 1: use as editor ESC/cancel.
+    if k == $5f {
+      return $1b
+    }
+
+    ; RUN/STOP: also use as editor ESC/cancel, useful in VICE/dev.
+    if k == $03 {
+      return $1b
+    }
+
+    ; C64/C128/VICE often returns unshifted letters as uppercase PETSCII.
+    ; Normalize the common editor-command/text path to ASCII-ish lowercase.
+    if k >= $41 and k <= $5a {
+      return k + $20
+    }
+#endif
+    return k
+  }
+
   sub start () {
 #if TARGET_X16
-    txt.iso()
-#endif
-#if TARGET_C64
-    txt.iso()
-#endif
-#if TARGET_C128
     txt.iso()
 #endif
     doc.tabNum               = 0 ; for future proofing
@@ -829,6 +847,7 @@ main {
     repeat {
     NAVCHARLOOP:
         char = cbm.GETIN2()
+        char = normalize_key(char)
         navchar_start()
         if char == $00 continue
     SKIP_NAVCHARLOOP:
@@ -864,7 +883,7 @@ main {
   sub key_mode_init() {
     ; On splash/INIT: treat ESC as a prefix so ESC+R / ESC+i is instant.
       when char {
-        'R','i','a' -> {
+        'R','r','i','a' -> {
           toggle_nav()
           flags.UNSAVED = true
           main.clear_splash()
@@ -880,7 +899,7 @@ main {
 
       ; "goto" dispatcher on edit or command modes
       when char {
-        'R'  -> { goto main.key_mode_nav.RLOOP2 }
+        'R','r'  -> { goto main.key_mode_nav.RLOOP2 }
         'i'  -> { goto main.key_mode_nav.ILOOP  }
         'a'  -> { goto main.key_mode_nav.ILOOP  }
       }
@@ -978,10 +997,7 @@ main {
 #if TARGET_X16
       txt.iso_off()
 #endif
-#if TARGET_C64
-      txt.iso_off()
-#endif
-#if TARGET_C64
+#if TARGET_C64 || TARGET_C128
       txt.iso_off()
 #endif
           sys.exit(0)
@@ -997,6 +1013,7 @@ main {
       'r' -> { ; replace char
         RLOOP1:
         void, char = cbm.GETIN()
+        char = normalize_key(char)
         ; go back to RLOOP1 if there's nothing input via keyboard
         if char == $00 {
           goto RLOOP1
@@ -1024,6 +1041,7 @@ main {
         RLOOP2:
         main.MODE = mode.REPLACE
         void, char = cbm.GETIN()
+        char = normalize_key(char)
         if char == $00 {
           goto RLOOP2
         }
@@ -1132,6 +1150,7 @@ main {
         ILOOP:
         main.MODE = mode.INSERT
         void, char = cbm.GETIN()
+        char = normalize_key(char)
         if char == $00 {
           goto ILOOP
         }
@@ -1265,6 +1284,7 @@ main {
         ILOOP:
         main.MODE = mode.INSERT
         void, char = cbm.GETIN()
+        char = normalize_key(char)
         if char == $00 {
           goto ILOOP
         }
@@ -2035,7 +2055,7 @@ main {
     txt.plot(view.LEFT_MARGIN,r)
     prints(view.BLANK_LINE76)
     txt.plot(view.LEFT_MARGIN,r)
-    str tmp = " " * 76 ; main.MaxLength
+    str tmp = " " * main.MaxLength
     void strings.copy(addr.text, tmp)
     strings.rstrip(tmp) ; <- to get rid of straw CR or LF, but is this necessary?
     prints(tmp)
@@ -2239,11 +2259,11 @@ main {
       else {
         prints("[unsaved buffer]")
       }
-      txt.plot(79-12, view.FOOTER_LINE)
+      txt.plot(view.RIGHT_MARGIN-12, view.FOOTER_LINE)
       printW(Y - view.TOP_LINE + 1)
       prints(",")
       printW(X - view.LEFT_MARGIN + 1)
-      txt.plot(79-3, view.FOOTER_LINE)
+      txt.plot(view.RIGHT_MARGIN-3, view.FOOTER_LINE)
       printW(main.lineCount)
     }
     else {
@@ -2260,7 +2280,7 @@ main {
       printw(main.NAVCHARCOUNT)
 
       ; Status badge MUST be on footer line (bugfix)
-      txt.plot(79-9, view.FOOTER_LINE)
+      txt.plot(view.RIGHT_MARGIN-9, view.FOOTER_LINE)
       if flags.UNSAVED == true {
         txt.color2($6,$1)
         prints("(UNSAVED)")
@@ -2290,7 +2310,9 @@ main {
   }
 
   sub prints (str x) {
+#if TARGET_X16
     cbm.CHROUT($80)
+#endif
     txt.print(x)
   }
 
@@ -2325,7 +2347,7 @@ main {
 
   sub alert_noblock(str message, ubyte color1, ubyte color2) {
     ubyte length = strings.length(message)
-    txt.plot(78-length, 0)
+    txt.plot(view.RIGHT_MARGIN-1-length, 0)
     txt.color2(color1, color2)
     prints(message)
     txt.color2($1, $6) ; sets text back to default, white on blue
@@ -2343,11 +2365,11 @@ main {
     ubyte c = view.c()
     ubyte r = view.r()
     ubyte length = strings.length(message)
-    txt.plot(78-length, 0)
+    txt.plot(view.RIGHT_MARGIN-1-length, 0)
     txt.color2(color1, color2)
     prints(message)
     sys.wait(delay)
-    txt.plot(78-length, 0)
+    txt.plot(view.RIGHT_MARGIN-1-length, 0)
     txt.color2($1, $6) ; sets text back to default, white on blue
     txt.plot(view.LEFT_MARGIN, 0)
     prints(view.BLANK_LINE79)
