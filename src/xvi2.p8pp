@@ -39,7 +39,13 @@
 
 %zeropage basicsafe
 %option no_sysinit
+
+#if TARGET_X16
 %encoding iso
+#endif
+#if TARGET_C64
+; C64 uses the target default PETSCII string/char encoding.
+#endif
 
 ; TARGET: external C-preprocessor selection.
 ; The Makefile should pass exactly one target define, for example -DTARGET_X16
@@ -101,6 +107,7 @@ view {
   ; Full line width, and editable line width without the gutter.
   str         BLANK_LINE79    = " " * 79
   str         BLANK_LINE76    = " " * 76
+  str         EMPTY_LINE_MARK = "~   "
 #endif
 
 #if TARGET_C64
@@ -108,6 +115,7 @@ view {
   ; Names remain legacy/X16-shaped so the editor core does not change yet.
   str         BLANK_LINE79    = " " * 39
   str         BLANK_LINE76    = " " * 36
+  str         EMPTY_LINE_MARK = ".   "
 #endif
   uword       CURR_TOP_LINE   = 1  ; tracks which actual doc line is at TOP_LINE
   uword[main.MaxLines] INDEX       ; Line to address look up
@@ -602,6 +610,7 @@ main {
   }
 
   sub splash() {
+#if TARGET_X16
     txt.clear_screen()
     txt.plot(0,view.TOP_LINE)
     init_empty_buffer(1)
@@ -630,15 +639,48 @@ main {
       txt.plot(0, txt.get_row())
       say("~    ")
     }
+#endif
+
+#if TARGET_C64
+    ; C64 splash: keep it compact and PETSCII-friendly.
+    ; The editor core still initializes a one-line buffer, but the oversized
+    ; X16 intro text is avoided on the 40x25 display.
+    txt.clear_screen()
+    txt.plot(0,view.TOP_LINE)
+    init_empty_buffer(1)
+    txt.clear_screen()
+    txt.plot(0,view.TOP_LINE)
+    say("XVI - C64 VI")
+    say("")
+    say("VERSION 2.0.RC-0")
+    say("")
+    say(":E FILE   LOAD FILE")
+    say(":Q        QUIT")
+    say("I         INSERT MODE")
+    say("R         REPLACE MODE")
+    say("")
+    say("PRESS I OR R TO START EDITING")
+#endif
   }
 
   sub clear_splash() {
+#if TARGET_X16
     txt.clear_screen()
     txt.plot(0,view.TOP_LINE+1)
     repeat 55 {
       txt.plot(0, txt.get_row())
       say("~    ")
     }
+#endif
+
+#if TARGET_C64
+    txt.clear_screen()
+    txt.plot(0,view.TOP_LINE)
+    repeat 22 {
+      txt.plot(0, txt.get_row())
+      say("     ")
+    }
+#endif
     txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
     cursor.place(view.LEFT_MARGIN, view.TOP_LINE)
   }
@@ -1671,7 +1713,7 @@ main {
         r = view.r()
         prints(view.BLANK_LINE79)
         txt.plot(0,r)
-        prints("~   ")
+        prints(view.EMPTY_LINE_MARK)
         txt.plot(0,r+1)
       }
       info_noblock("             ")
