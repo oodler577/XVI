@@ -5,9 +5,10 @@ JAVA    ?= java
 JAR     ?= $(ROOT)/prog8c-12.0.1-all.jar
 PROG8C  := $(JAVA) -jar "$(JAR)"
 
-EMU_X16 ?= x16emu
-EMU_C64 ?= /c/tools/vice/SDL2VICE-3.10-win64/x64sc.exe
-OPT     ?=
+EMU_X16  ?= x16emu
+EMU_C64  ?= /c/tools/vice/SDL2VICE-3.10-win64/x64sc.exe
+EMU_C128 ?= /c/tools/vice/SDL2VICE-3.10-win64/x128.exe
+OPT      ?=
 
 SRC     := src/xvi2.p8pp
 NAME    := xvi2
@@ -53,6 +54,7 @@ endef
 # --- targets ---
 $(eval $(call BUILD_template,x16,cx16))
 $(eval $(call BUILD_template,c64,c64))
+$(eval $(call BUILD_template,c128,c128))
 $(eval $(call BUILD_template,vic20,vic20))
 $(eval $(call BUILD_template,atari,atari))
 
@@ -77,6 +79,15 @@ debug-c64: c64
 trace-c64: c64
 	$(EMU_C64) -console build/c64/$(NAME)-c64.prg
 
+run-c128: c128
+	$(EMU_C128) -80col -autostart "$(CURDIR)/build/c128/$(NAME)-c128.prg"
+
+debug-c128: c128
+	$(EMU_C128) -80col -moncommands build/c128/$(NAME)-c128.vice-mon-list build/c128/$(NAME)-c128.prg
+
+trace-c128: c128
+	$(EMU_C128) -80col -console build/c128/$(NAME)-c128.prg
+
 # --- package ---
 bundle: x16
 	rm -rfv ./$(PKG)
@@ -91,9 +102,9 @@ bundle: x16
 # --- cleanup ---
 clean:
 	rm -rf build
-	rm -fv src/$(NAME)-x16.p8 src/$(NAME)-c64.p8 src/$(NAME)-vic20.p8 src/$(NAME)-atari.p8
-	rm -fv $(NAME)-x16.prg $(NAME)-c64.prg $(NAME)-vic20.prg $(NAME)-atari.prg
-	rm -fv $(NAME)-x16.asm $(NAME)-c64.asm $(NAME)-vic20.asm $(NAME)-atari.asm
-	rm -fv $(NAME)-x16.vice-mon-list $(NAME)-c64.vice-mon-list $(NAME)-vic20.vice-mon-list $(NAME)-atari.vice-mon-list
+	rm -fv src/$(NAME)-x16.p8 src/$(NAME)-c64.p8 src/$(NAME)-c128.p8 src/$(NAME)-vic20.p8 src/$(NAME)-atari.p8
+	rm -fv $(NAME)-x16.prg $(NAME)-c64.prg $(NAME)-c128.prg $(NAME)-vic20.prg $(NAME)-atari.prg
+	rm -fv $(NAME)-x16.asm $(NAME)-c64.asm $(NAME)-c128.asm $(NAME)-vic20.asm $(NAME)-atari.asm
+	rm -fv $(NAME)-x16.vice-mon-list $(NAME)-c64.vice-mon-list $(NAME)-c128.vice-mon-list $(NAME)-vic20.vice-mon-list $(NAME)-atari.vice-mon-list
 	rm -fv xvi xvi.prg xvi2 xvi2.prg *.asm strucst.* demo.gif 2> /dev/null || echo -n
 	rm -rf ./$(PKG) *.zip 2> /dev/null || echo -n

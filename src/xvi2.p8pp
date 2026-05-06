@@ -11,6 +11,9 @@
 #if TARGET_C64
 ; C64 uses the target default PETSCII string/char encoding.
 #endif
+#if TARGET_C128
+; C128 uses the target default PETSCII string/char encoding.
+#endif
 
 ; TARGET: external C-preprocessor selection.
 ; The Makefile should pass exactly one target define, for example -DTARGET_X16
@@ -20,6 +23,9 @@
 #endif
 #ifndef TARGET_C64
 #define TARGET_C64 0
+#endif
+#ifndef TARGET_C128
+#define TARGET_C128 0
 #endif
 
 %import textio
@@ -68,6 +74,17 @@ view {
   const ubyte FOOTER_LINE     = 24
 #endif
 
+#if TARGET_C128
+  ; C128: basic 80-column editor geometry for initial VICE bring-up.
+  const ubyte LEFT_MARGIN     = 4
+  const ubyte RIGHT_MARGIN    = 79
+  const ubyte HEIGHT          = 22
+  const ubyte TOP_LINE        = 1
+  const ubyte MIDDLE_LINE     = 11
+  const ubyte BOTTOM_LINE     = 22
+  const ubyte FOOTER_LINE     = 24
+#endif
+
 #if TARGET_X16
   ; Full line width, and editable line width without the gutter.
   str         BLANK_LINE79    = " " * 79
@@ -80,6 +97,14 @@ view {
   ; Names remain legacy/X16-shaped so the editor core does not change yet.
   str         BLANK_LINE79    = " " * 39
   str         BLANK_LINE76    = " " * 36
+  str         EMPTY_LINE_MARK = ".   "
+#endif
+
+#if TARGET_C128
+  ; Full line width, and editable line width without the gutter.
+  ; Names remain legacy/X16-shaped so the editor core does not change yet.
+  str         BLANK_LINE79    = " " * 79
+  str         BLANK_LINE76    = " " * 76
   str         EMPTY_LINE_MARK = ".   "
 #endif
   uword       CURR_TOP_LINE   = 1  ; tracks which actual doc line is at TOP_LINE
@@ -165,8 +190,8 @@ cursor {
 #if TARGET_X16
       cbm.CHROUT($80)
 #endif
-#if TARGET_C64
-      ; C64: no X16 ISO quote-mode escape needed here.
+#if TARGET_C64 || TARGET_C128
+      ; CBM PETSCII targets: no X16 ISO quote-mode escape needed here.
 #endif
     }
     txt.chrout(saved_char)
@@ -187,8 +212,8 @@ cursor {
 #if TARGET_X16
       cbm.CHROUT($80)
 #endif
-#if TARGET_C64
-      ; C64: no X16 ISO quote-mode escape needed here.
+#if TARGET_C64 || TARGET_C128
+      ; CBM PETSCII targets: no X16 ISO quote-mode escape needed here.
 #endif
     }
     txt.chrout(saved_char)
@@ -219,7 +244,6 @@ command {
     txt.print(":")
   CMDINPUT:
     void, cmdchar = cbm.GETIN()
-    cmdchar = main.normalize_key(cmdchar)
     if cmdchar == $1b {  ; ESC key, get out of command mode
       txt.plot(0, view.FOOTER_LINE) ; move cursor to the starting position for writing
       main.prints(view.BLANK_LINE79)
@@ -232,8 +256,8 @@ command {
   #if TARGET_X16
       cbm.CHROUT($80)
 #endif
-#if TARGET_C64
-      ; C64: no X16 ISO quote-mode escape needed here.
+#if TARGET_C64 || TARGET_C128
+      ; CBM PETSCII targets: no X16 ISO quote-mode escape needed here.
 #endif
       }
       txt.chrout(cmdchar)
@@ -422,12 +446,7 @@ main {
 
   ^^Document doc
 
-#if TARGET_X16
   const uword MaxLength  = 76
-#endif
-#if TARGET_C64
-  const uword MaxLength  = 36
-#endif
   const uword LineSize   = sizeof(Line)
 
   const uword MaxLines   = 256
@@ -634,6 +653,27 @@ main {
     say("")
     say("press i or r to start editing")
 #endif
+
+#if TARGET_C128
+    ; C128 splash: initial 80-column VICE bring-up, PETSCII-safe.
+    txt.lowercase()
+    txt.clear_screen()
+    txt.plot(0,view.TOP_LINE)
+    init_empty_buffer(1)
+    txt.lowercase()
+    txt.clear_screen()
+    txt.plot(0,view.TOP_LINE)
+    say("xvi - c128 80 column vi")
+    say("")
+    say("version 2.0.rc-0")
+    say("")
+    say(":e file   load file")
+    say(":q        quit")
+    say("i         insert mode")
+    say("r         replace mode")
+    say("")
+    say("initial c128 bring-up")
+#endif
   }
 
   sub clear_splash() {
@@ -647,6 +687,15 @@ main {
 #endif
 
 #if TARGET_C64
+    txt.clear_screen()
+    txt.plot(0,view.TOP_LINE)
+    repeat 22 {
+      txt.plot(0, txt.get_row())
+      say("     ")
+    }
+#endif
+
+#if TARGET_C128
     txt.clear_screen()
     txt.plot(0,view.TOP_LINE)
     repeat 22 {
@@ -747,32 +796,14 @@ main {
   ubyte row
   ubyte numbers
 
-  sub normalize_key(ubyte k) -> ubyte {
-#if TARGET_C64
-    ; C64 physical left-arrow key near 1: use as editor ESC/cancel.
-    if k == $5f {
-      return $1b
-    }
-
-    ; C64 RUN/STOP: also use as editor ESC/cancel, useful in VICE/dev.
-    if k == $03 {
-      return $1b
-    }
-
-    ; C64/VICE often returns unshifted letters as uppercase PETSCII.
-    ; Normalize the common editor-command/text path to ASCII-ish lowercase.
-    if k >= $41 and k <= $5a {
-      return k + $20
-    }
-#endif
-    return k
-  }
-
   sub start () {
 #if TARGET_X16
     txt.iso()
 #endif
 #if TARGET_C64
+    txt.iso()
+#endif
+#if TARGET_C128
     txt.iso()
 #endif
     doc.tabNum               = 0 ; for future proofing
@@ -798,7 +829,6 @@ main {
     repeat {
     NAVCHARLOOP:
         char = cbm.GETIN2()
-        char = normalize_key(char)
         navchar_start()
         if char == $00 continue
     SKIP_NAVCHARLOOP:
@@ -834,7 +864,7 @@ main {
   sub key_mode_init() {
     ; On splash/INIT: treat ESC as a prefix so ESC+R / ESC+i is instant.
       when char {
-        'R','r','i','a' -> {
+        'R','i','a' -> {
           toggle_nav()
           flags.UNSAVED = true
           main.clear_splash()
@@ -850,7 +880,7 @@ main {
 
       ; "goto" dispatcher on edit or command modes
       when char {
-        'R','r'  -> { goto main.key_mode_nav.RLOOP2 }
+        'R'  -> { goto main.key_mode_nav.RLOOP2 }
         'i'  -> { goto main.key_mode_nav.ILOOP  }
         'a'  -> { goto main.key_mode_nav.ILOOP  }
       }
@@ -967,7 +997,6 @@ main {
       'r' -> { ; replace char
         RLOOP1:
         void, char = cbm.GETIN()
-        char = normalize_key(char)
         ; go back to RLOOP1 if there's nothing input via keyboard
         if char == $00 {
           goto RLOOP1
@@ -995,7 +1024,6 @@ main {
         RLOOP2:
         main.MODE = mode.REPLACE
         void, char = cbm.GETIN()
-        char = normalize_key(char)
         if char == $00 {
           goto RLOOP2
         }
@@ -1027,8 +1055,8 @@ main {
         #if TARGET_X16
       cbm.CHROUT($80)
 #endif
-#if TARGET_C64
-      ; C64: no X16 ISO quote-mode escape needed here.
+#if TARGET_C64 || TARGET_C128
+      ; CBM PETSCII targets: no X16 ISO quote-mode escape needed here.
 #endif
             }
             flags.UNSAVED = true
@@ -1054,7 +1082,7 @@ main {
 #if TARGET_X16
         cbm.CHROUT(char)
 #endif
-#if TARGET_C64
+#if TARGET_C64 || TARGET_C128
         txt.chrout(char)
 #endif
         flags.UNSAVED = true
@@ -1104,7 +1132,6 @@ main {
         ILOOP:
         main.MODE = mode.INSERT
         void, char = cbm.GETIN()
-        char = normalize_key(char)
         if char == $00 {
           goto ILOOP
         }
@@ -1198,6 +1225,15 @@ main {
       $06,$46 -> page_forward()                  ; ctrl+f / shift+f
       $02,$42 -> page_backward()                 ; ctrl+b / shift+b
 #endif
+#if TARGET_C128
+      ; C128 raw CBM cursor and control-key aliases for initial bring-up.
+      $91 -> cursor_up_on_k()                    ; UP
+      $11 -> cursor_down_on_j()                  ; DOWN
+      $9d, $14, $08 -> cursor_left_on_h()        ; LEFT/backspace variants
+      $20, $1d -> cursor_right_on_l()            ; SPACE/right arrow
+      $06,$46 -> page_forward()                  ; ctrl+f / shift+f
+      $02,$42 -> page_backward()                 ; ctrl+b / shift+b
+#endif
     }
   }
 
@@ -1229,7 +1265,6 @@ main {
         ILOOP:
         main.MODE = mode.INSERT
         void, char = cbm.GETIN()
-        char = normalize_key(char)
         if char == $00 {
           goto ILOOP
         }
@@ -1571,6 +1606,15 @@ main {
   }
 
   sub do_dd() {
+    if main.lineCount < 2 {
+      txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
+      prints(view.BLANK_LINE76)
+      txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
+      return
+    }
+
+    info("cut")
+
     ubyte c = view.c()
     ubyte r = view.r()
 
@@ -1599,11 +1643,7 @@ main {
       txt.plot(view.LEFT_MARGIN, r)
       cursor.replace(view.LEFT_MARGIN, r)
       main.update_tracker()
-      return
     }
-
-    info("cut")
-
 
     ^^Line curr_addr = get_Line_addr(r) ; line being deleted
     ^^Line prev_addr = curr_addr.prev   ; line before line being deleted
@@ -1885,7 +1925,7 @@ main {
     ubyte curr_line = view.r()
     ubyte curr_col  = view.c()
     ubyte next_line = curr_line-1;
-    ubyte curr_end  = get_end_col(curr_line)
+    ubyte curr_end  = get_end_col(view.c())
     ubyte next_col  = curr_col
     ubyte next_end  = get_end_col(next_line)
 
@@ -1937,7 +1977,7 @@ main {
     ubyte curr_line = view.r()
     ubyte curr_col  = view.c()
     ubyte next_line = curr_line + 1
-    ubyte curr_end  = get_end_col(curr_line)
+    ubyte curr_end  = get_end_col(view.c())
     ubyte next_col  = curr_col
     ubyte next_end  = get_end_col(next_line)
 
@@ -1968,7 +2008,7 @@ main {
 #if TARGET_X16
       txt.scroll_up()
 #endif
-#if TARGET_C64
+#if TARGET_C64 || TARGET_C128
       txt.scroll_up(false)
 #endif
       draw_bottom_line(view.CURR_TOP_LINE + view.HEIGHT - 1)
@@ -1990,17 +2030,14 @@ main {
 
   ; prints address 'addr' at row 'r'
   sub redraw_line(^^Line addr, ubyte r) -> ubyte {
+    ;info_noblock("line saved to buffer ...")
+
     txt.plot(view.LEFT_MARGIN,r)
     prints(view.BLANK_LINE76)
     txt.plot(view.LEFT_MARGIN,r)
-
-    if addr == 0 {
-      return 0
-    }
-
-    str tmp = " " * main.MaxLength
+    str tmp = " " * 76 ; main.MaxLength
     void strings.copy(addr.text, tmp)
-    strings.rstrip(tmp) ; <- to get rid of stray CR or LF, but is this necessary?
+    strings.rstrip(tmp) ; <- to get rid of straw CR or LF, but is this necessary?
     prints(tmp)
     return strings.length(tmp) ; <- still we can get length, and this can be helpful
   }
@@ -2202,11 +2239,11 @@ main {
       else {
         prints("[unsaved buffer]")
       }
-      txt.plot(view.RIGHT_MARGIN-12, view.FOOTER_LINE)
+      txt.plot(79-12, view.FOOTER_LINE)
       printW(Y - view.TOP_LINE + 1)
       prints(",")
       printW(X - view.LEFT_MARGIN + 1)
-      txt.plot(view.RIGHT_MARGIN-3, view.FOOTER_LINE)
+      txt.plot(79-3, view.FOOTER_LINE)
       printW(main.lineCount)
     }
     else {
@@ -2223,7 +2260,7 @@ main {
       printw(main.NAVCHARCOUNT)
 
       ; Status badge MUST be on footer line (bugfix)
-      txt.plot(view.RIGHT_MARGIN-9, view.FOOTER_LINE)
+      txt.plot(79-9, view.FOOTER_LINE)
       if flags.UNSAVED == true {
         txt.color2($6,$1)
         prints("(UNSAVED)")
@@ -2253,9 +2290,7 @@ main {
   }
 
   sub prints (str x) {
-#if TARGET_X16
     cbm.CHROUT($80)
-#endif
     txt.print(x)
   }
 
@@ -2290,7 +2325,7 @@ main {
 
   sub alert_noblock(str message, ubyte color1, ubyte color2) {
     ubyte length = strings.length(message)
-    txt.plot(view.RIGHT_MARGIN-1-length, 0)
+    txt.plot(78-length, 0)
     txt.color2(color1, color2)
     prints(message)
     txt.color2($1, $6) ; sets text back to default, white on blue
@@ -2308,11 +2343,11 @@ main {
     ubyte c = view.c()
     ubyte r = view.r()
     ubyte length = strings.length(message)
-    txt.plot(view.RIGHT_MARGIN-1-length, 0)
+    txt.plot(78-length, 0)
     txt.color2(color1, color2)
     prints(message)
     sys.wait(delay)
-    txt.plot(view.RIGHT_MARGIN-1-length, 0)
+    txt.plot(78-length, 0)
     txt.color2($1, $6) ; sets text back to default, white on blue
     txt.plot(view.LEFT_MARGIN, 0)
     prints(view.BLANK_LINE79)
@@ -2323,9 +2358,9 @@ main {
 txt {
   %option merge
 
-#if TARGET_C64
-  ; C64 compatibility shims for X16 textio conveniences used above.
-  ; C64 textio has color(), but not color2()/iso()/iso_off().
+#if TARGET_C64 || TARGET_C128
+  ; CBM compatibility shims for X16 textio conveniences used above.
+  ; C64/C128 textio has color(), but not color2()/iso()/iso_off().
   sub color2(ubyte txtcol, ubyte bgcol) {
     txt.color(txtcol)
   }
@@ -2372,8 +2407,8 @@ txt {
   }
 #endif
 
-#if TARGET_C64
-  ; Conservative compile-only placeholders. C64 screen-RAM scroll comes next.
+#if TARGET_C64 || TARGET_C128
+  ; Conservative compile-only placeholders. CBM screen-RAM scroll comes next.
   sub scrolldown_nlast(ubyte top_row, ubyte col_start) {
   }
 
