@@ -6,6 +6,7 @@ JAR     ?= $(ROOT)/prog8c-12.0.1-all.jar
 PROG8C  := $(JAVA) -jar "$(JAR)"
 
 EMU_X16 ?= x16emu
+EMU_C64 ?= x64sc
 OPT     ?=
 
 SRC     := src/xvi2.p8pp
@@ -67,16 +68,14 @@ debug-x16: x16
 trace-x16: x16
 	$(EMU_X16) -scale 2 -prg build/x16/$(NAME)-x16.prg -run -trace
 
-run: run-c64
-
 run-c64: c64
-	$(EMU_X16) -debug -scale 2 -prg build/c64/$(NAME)-c64.prg -run -gif demo.gif
+	$(EMU_C64) build/c64/$(NAME)-c64.prg
 
 debug-c64: c64
-	$(EMU_X16) -scale 2 -prg build/c64/$(NAME)-c64.prg -run -debug
+	$(EMU_C64) -moncommands build/c64/$(NAME)-c64.vice-mon-list build/c64/$(NAME)-c64.prg
 
 trace-c64: c64
-	$(EMU_X16) -scale 2 -prg build/c64/$(NAME)-c64.prg -run -trace
+	$(EMU_C64) -console build/c64/$(NAME)-c64.prg
 
 # --- package ---
 bundle: x16
@@ -92,8 +91,9 @@ bundle: x16
 # --- cleanup ---
 clean:
 	rm -rf build
-	rm -fv $(NAME)-x16.p8 src/$(NAME)-c64.p8 src/$(NAME)-vic20.p8 src/$(NAME)-atari.p8
-	rm -fv $(NAME)-x16.prg src/$(NAME)-c64.prg src/$(NAME)-vic20.prg src/$(NAME)-atari.prg
-	rm -fv $(NAME)-x16.asm src/$(NAME)-c64.asm src/$(NAME)-vic20.asm src/$(NAME)-atari.asm
+	rm -fv src/$(NAME)-x16.p8 src/$(NAME)-c64.p8 src/$(NAME)-vic20.p8 src/$(NAME)-atari.p8
+	rm -fv $(NAME)-x16.prg $(NAME)-c64.prg $(NAME)-vic20.prg $(NAME)-atari.prg
+	rm -fv $(NAME)-x16.asm $(NAME)-c64.asm $(NAME)-vic20.asm $(NAME)-atari.asm
+	rm -fv $(NAME)-x16.vice-mon-list $(NAME)-c64.vice-mon-list $(NAME)-vic20.vice-mon-list $(NAME)-atari.vice-mon-list
 	rm -fv xvi xvi.prg xvi2 xvi2.prg *.asm strucst.* demo.gif 2> /dev/null || echo -n
 	rm -rf ./$(PKG) *.zip 2> /dev/null || echo -n

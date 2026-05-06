@@ -1,19 +1,64 @@
 ;
 ; vim:set softtabstop=2 shiftwidth=2 expandtab:
 ;
+; BUGS:
+; - dd bug
+; -- 1. open a file, immediately jump to the botton
+; -- 2. add a few lines at the bottom with 'o', typing some
+; -- 3. hit <esc>, then do "dd"
+
+; TODO:
+; - add 'dG' for (gillham)
+; - isolate remaining cursor issues
+; - get rid of full screen redraw with "dd"
+; - implement a proper commandline parser
+; - add fast "scroll_down" on in 'R' and hit 'enter' (currently way to slow
+; -- when it hits draw_screen() on new buffer)
+; - :set number / :set nonumber (turns line numbers on/off)
+
+; ONGOING:
+; - regression testing
+
+; FUTURE TODO:
+; - ":/" (requested by Sam)
+; - allow many more lines (convert Line to use str instead permanent line)
+; - do not write contiguous spaces (fully blank line, trim when writing)
+; -- this might be an optimization that is needed when we increase line
+; -- support > 140
+; - stack based "undo" (p/P, o/O, dd)
+; - fast "save_line_buffer"
+
+; DONE:
+; - added <ESC> as cancel when in command mode
+; - adding a non-supported command in command mode messed up the bottom footer,
+; - this is fixed
+; - verify as part of that, "~" is not present at the start in some cases, fix that
+; - wq! - force save, force save and quit
+; - add checks around wq, wq! (buffer, first command?)
+; See CHANGELOG for the rest
 
 %zeropage basicsafe
 %option no_sysinit
 %encoding iso
 
-; TARGET: external preprocessor selection.
-; Keep TARGET_X16 as the only enabled target for the current Commander X16 build.
-#define TARGET_X16 1
+; TARGET: external C-preprocessor selection.
+; The Makefile should pass exactly one target define, for example -DTARGET_X16
+; or -DTARGET_C64. Undefined targets default to 0 so #if blocks stay exclusive.
+#ifndef TARGET_X16
+#define TARGET_X16 0
+#endif
+#ifndef TARGET_C64
 #define TARGET_C64 0
+#endif
+#ifndef TARGET_C64_REU
 #define TARGET_C64_REU 0
+#endif
+#ifndef TARGET_VIC20
 #define TARGET_VIC20 0
+#endif
+#ifndef TARGET_ATARI800
 #define TARGET_ATARI800 0
-
+#endif
 
 %import textio
 %import strings
@@ -40,7 +85,7 @@ flags {
 
 view {
 #if TARGET_X16
-  ; TARGET_X16: 80-column / 60-row Commander X16 editor geometry.
+  ; X16: 80-column / 60-row Commander X16 editor geometry.
   const ubyte LEFT_MARGIN     = 4
   const ubyte RIGHT_MARGIN    = 79
   const ubyte HEIGHT          = 56 ; absolute height of the edit/view area
@@ -50,7 +95,8 @@ view {
   const ubyte FOOTER_LINE     = 59
 #endif
 
-%ifdef TARGET_C64
+#if TARGET_C64
+  ; C64: conservative 40x25 editor geometry.
   const ubyte LEFT_MARGIN     = 4
   const ubyte RIGHT_MARGIN    = 39
   const ubyte HEIGHT          = 22
@@ -58,8 +104,7 @@ view {
   const ubyte MIDDLE_LINE     = 11
   const ubyte BOTTOM_LINE     = 22
   const ubyte FOOTER_LINE     = 24
-%endif
-
+#endif
   str         BLANK_LINE79    = " " * 79
   str         BLANK_LINE76    = " " * 76
   uword       CURR_TOP_LINE   = 1  ; tracks which actual doc line is at TOP_LINE
@@ -192,9 +237,7 @@ command {
     txt.plot(0, view.FOOTER_LINE)
     txt.print(":")
   CMDINPUT:
-#if TARGET_X16
     void, cmdchar = cbm.GETIN()
-#endif
     if cmdchar == $1b {  ; ESC key, get out of command mode
       txt.plot(0, view.FOOTER_LINE) ; move cursor to the starting position for writing
       main.prints(view.BLANK_LINE79)
@@ -204,7 +247,7 @@ command {
     }
     if cmdchar != $0d {       ; any character now but <ENTER>
       if cmdchar == $22 {
-        #if TARGET_X16
+  #if TARGET_X16
       cbm.CHROUT($80)
 #endif
       }
@@ -248,7 +291,7 @@ command {
       main.save_current_file() 
       txt.clear_screenchars($20)
 #if TARGET_X16
-          txt.iso_off()
+      txt.iso_off()
 #endif
       sys.exit(0)
     }
@@ -293,8 +336,8 @@ command {
         }
         else {
           txt.clear_screenchars($20)
-#if TARGET_X16
-          txt.iso_off()
+    #if TARGET_X16
+      txt.iso_off()
 #endif
           sys.exit(0)
         }
@@ -608,7 +651,11 @@ main {
     ubyte ub
     const ubyte maxLen = main.MaxLength
 
+#if TARGET_X16
     void diskio.f_open_w_seek(filepath)
+#else
+    void diskio.f_open_w(filepath)
+#endif
 
     if main.lineCount == 0 {
       diskio.f_close_w()
@@ -666,7 +713,7 @@ main {
   ubyte numbers
 
   sub start () {
-    #if TARGET_X16
+#if TARGET_X16
     txt.iso()
 #endif
     doc.tabNum               = 0 ; for future proofing
@@ -691,9 +738,7 @@ main {
 
     repeat {
     NAVCHARLOOP:
-        #if TARGET_X16
         char = cbm.GETIN2()
-#endif
         navchar_start()
         if char == $00 continue
     SKIP_NAVCHARLOOP:
@@ -840,8 +885,8 @@ main {
           }
           save_current_file()
           txt.clear_screenchars($20)
-          #if TARGET_X16
-          txt.iso_off()
+    #if TARGET_X16
+      txt.iso_off()
 #endif
           sys.exit(0)
         }
@@ -855,9 +900,7 @@ main {
       ; E D I T I N G
       'r' -> { ; replace char
         RLOOP1:
-        #if TARGET_X16
         void, char = cbm.GETIN()
-#endif
         ; go back to RLOOP1 if there's nothing input via keyboard
         if char == $00 {
           goto RLOOP1
@@ -884,9 +927,7 @@ main {
 
         RLOOP2:
         main.MODE = mode.REPLACE
-        #if TARGET_X16
         void, char = cbm.GETIN()
-#endif
         if char == $00 {
           goto RLOOP2
         }
@@ -915,7 +956,7 @@ main {
             }
             ; clear quote mode before emitting a quote
             if char == $22 {
-              #if TARGET_X16
+        #if TARGET_X16
       cbm.CHROUT($80)
 #endif
             }
@@ -941,6 +982,8 @@ main {
         cursor.saved_char = txt.getchr(view.c()+1,view.r())
 #if TARGET_X16
         cbm.CHROUT(char)
+#else
+        txt.chrout(char)
 #endif
         flags.UNSAVED = true
         txt.plot(view.c(),view.r())
@@ -988,9 +1031,7 @@ main {
 
         ILOOP:
         main.MODE = mode.INSERT
-        #if TARGET_X16
         void, char = cbm.GETIN()
-#endif
         if char == $00 {
           goto ILOOP
         }
@@ -1067,7 +1108,7 @@ main {
       'l' -> cursor_right_on_l()                 ; vi RIGHT
 
 #if TARGET_X16
-      ; TARGET_X16: raw CBM/X16 cursor and control-key aliases.
+      ; X16 raw CBM cursor and control-key aliases.
       $91 -> cursor_up_on_k()                    ; UP
       $11 -> cursor_down_on_j()                  ; DOWN
       $9d, $14, $08 -> cursor_left_on_h()        ; LEFT/backspace variants
@@ -1105,9 +1146,7 @@ main {
 
         ILOOP:
         main.MODE = mode.INSERT
-        #if TARGET_X16
         void, char = cbm.GETIN()
-#endif
         if char == $00 {
           goto ILOOP
         }
@@ -1449,6 +1488,15 @@ main {
   }
 
   sub do_dd() {
+    if main.lineCount < 2 {
+      txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
+      prints(view.BLANK_LINE76)
+      txt.plot(view.LEFT_MARGIN, view.TOP_LINE)
+      return
+    }
+
+    info("cut")
+
     ubyte c = view.c()
     ubyte r = view.r()
 
@@ -1477,10 +1525,7 @@ main {
       txt.plot(view.LEFT_MARGIN, r)
       cursor.replace(view.LEFT_MARGIN, r)
       main.update_tracker()
-      return
     }
-
-    info("cut")
 
     ^^Line curr_addr = get_Line_addr(r) ; line being deleted
     ^^Line prev_addr = curr_addr.prev   ; line before line being deleted
@@ -1762,7 +1807,7 @@ main {
     ubyte curr_line = view.r()
     ubyte curr_col  = view.c()
     ubyte next_line = curr_line-1;
-    ubyte curr_end  = get_end_col(curr_line)
+    ubyte curr_end  = get_end_col(view.c())
     ubyte next_col  = curr_col
     ubyte next_end  = get_end_col(next_line)
 
@@ -1814,7 +1859,7 @@ main {
     ubyte curr_line = view.r()
     ubyte curr_col  = view.c()
     ubyte next_line = curr_line + 1
-    ubyte curr_end  = get_end_col(curr_line)
+    ubyte curr_end  = get_end_col(view.c())
     ubyte next_col  = curr_col
     ubyte next_end  = get_end_col(next_line)
 
@@ -1842,7 +1887,11 @@ main {
       say(view.BLANK_LINE79)
       prints(view.BLANK_LINE79)
 
+#if TARGET_X16
       txt.scroll_up()
+#else
+      txt.scroll_up(false)
+#endif
       draw_bottom_line(view.CURR_TOP_LINE + view.HEIGHT - 1)
 
       cursor.replace(next_col, curr_line)
@@ -1862,14 +1911,11 @@ main {
 
   ; prints address 'addr' at row 'r'
   sub redraw_line(^^Line addr, ubyte r) -> ubyte {
+    ;info_noblock("line saved to buffer ...")
+
     txt.plot(view.LEFT_MARGIN,r)
     prints(view.BLANK_LINE76)
     txt.plot(view.LEFT_MARGIN,r)
-
-    if addr == 0 {
-      return 0
-    }
-
     str tmp = " " * 76 ; main.MaxLength
     void strings.copy(addr.text, tmp)
     strings.rstrip(tmp) ; <- to get rid of straw CR or LF, but is this necessary?
@@ -2061,13 +2107,9 @@ main {
       prints(view.BLANK_LINE79)
       txt.plot(1, view.FOOTER_LINE)
       if @(doc.filepath+1) != $20 {
-        #if TARGET_X16
         cbm.CHROUT($22)
-#endif
         prints(doc.filepath)
-        #if TARGET_X16
         cbm.CHROUT($22)
-#endif
         if flags.UNSAVED == true {
           prints(" [modified]")
         }
@@ -2129,9 +2171,7 @@ main {
   }
 
   sub prints (str x) {
-    #if TARGET_X16
-      cbm.CHROUT($80)
-#endif
+    cbm.CHROUT($80)
     txt.print(x)
   }
 
@@ -2199,8 +2239,22 @@ main {
 txt {
   %option merge
 
+#if TARGET_C64
+  ; C64 compatibility shims for X16 textio conveniences used above.
+  ; C64 textio has color(), but not color2()/iso()/iso_off().
+  sub color2(ubyte txtcol, ubyte bgcol) {
+    txt.color(txtcol)
+  }
+
+  sub iso() {
+  }
+
+  sub iso_off() {
+  }
+#endif
+
 #if TARGET_X16
-  ; TARGET_X16: VERA text matrix fast scroll implementation.
+  ; X16 VERA text matrix fast scroll implementation.
   sub scrolldown_nlast(ubyte top_row, ubyte col_start) {
     ubyte columns, rows, j
     columns, rows = txt.size()
@@ -2234,13 +2288,12 @@ txt {
   }
 #endif
 
-%ifdef TARGET_C64
-sub scrolldown_nlast(ubyte top_row, ubyte col_start) {
-  ; TODO: C64 screen-RAM implementation
-}
+#if TARGET_C64
+  ; Conservative compile-only placeholders. C64 screen-RAM scroll comes next.
+  sub scrolldown_nlast(ubyte top_row, ubyte col_start) {
+  }
 
-sub scrolldown() {
-  ; TODO: C64 screen-RAM implementation
-}
-%endif
+  sub scrolldown() {
+  }
+#endif
 }
